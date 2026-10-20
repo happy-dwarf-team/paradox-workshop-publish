@@ -8,14 +8,14 @@ Publish Paradox Interactive game mods to the Steam Workshop from GitHub Actions 
 
 Supported games: Europa Universalis IV, Hearts of Iron IV, Stellaris, Imperator: Rome, Crusader Kings III, Victoria 3 and Europa Universalis V.
 
-> **Status: pre-release (0.x).** There are no release binaries yet, and the GitHub Action cannot download `pdx-ws` until they exist. Both are coming in 0.1.0, and so are the release archives that ship the `steam_api` library for `client` mode and `pdx-ws init`. Until then you can build `pdx-ws` from source (see [Development](#development)) to try `plan`, `publish` in `steamcmd` mode and `session export`.
+> **Status: 0.x.** The configuration and the action's inputs may still change before 1.0. Download `pdx-ws` from the [releases](https://github.com/happy-dwarf-team/paradox-workshop-publish/releases); each archive holds the binary and the Steamworks `steam_api` library that `client` mode needs next to it.
 
 ## Two modes
 
 | Mode | How it reaches Steam | Where it runs | Sets tags |
 | --- | --- | --- | --- |
 | `steamcmd` | steamcmd with a saved *Steam session* | GitHub-hosted runners, any CI | No |
-| `client` (coming in 0.1.0) | the Steam client you are logged in to | your computer, a self-hosted runner | Yes |
+| `client` | the Steam client you are logged in to | your computer, a self-hosted runner | Yes |
 
 You create the Workshop item once on your computer with `pdx-ws init` in `client` mode. After that, CI publishes every release in `steamcmd` mode.
 
@@ -38,7 +38,7 @@ You create the Workshop item once on your computer with `pdx-ws init` in `client
    pdx-ws plan
    ```
 
-3. **Create the Workshop item**, once, with Steam running: `pdx-ws init` (coming in 0.1.0). It writes the item ID into the descriptor; commit that change.
+3. **Create the Workshop item**, once, with Steam running: `pdx-ws init`. It writes the item ID into the descriptor; commit that change.
 
 4. **Save a Steam session as a secret** of a `steam-workshop` environment:
 
@@ -64,7 +64,7 @@ You create the Workshop item once on your computer with `pdx-ws init` in `client
          - uses: actions/checkout@v7
            with:
              persist-credentials: false
-         - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0 # coming in 0.1.0
+         - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0
            with:
              steam-username: ${{ secrets.STEAM_USERNAME }}
              steam-session: ${{ secrets.STEAM_SESSION }}

@@ -1,6 +1,6 @@
 # The GitHub Action
 
-> **Coming in 0.1.0.** The action downloads a `pdx-ws` release, and there are none yet. The examples use `@v0.1.0`, the first version that will work. From 1.0 there is also a floating `@v1` tag.
+The action downloads the `pdx-ws` release of its own tag and checks its build attestation (or, without `gh`, its SHA-256). Pin a release such as `@v0.1.0`; from 1.0 there is also a floating `@v1` tag.
 
 ```yaml
 - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0
@@ -16,7 +16,7 @@ Run it after `actions/checkout`, in a job that names the `steam-workshop` enviro
 
 | Input | Default | Meaning |
 | --- | --- | --- |
-| `mode` | `steamcmd` | How the plan reaches Steam. `client` needs a [self-hosted runner](self-hosted-client-mode.md) (coming in 0.1.0). |
+| `mode` | `steamcmd` | How the plan reaches Steam. `client` needs a [self-hosted runner](self-hosted-client-mode.md). |
 | `config` | `workshop.toml` | The path of `workshop.toml`, relative to the repository root. |
 | `mod` | all mods | The `id` of the mod to publish. Separate several with spaces, commas or new lines. |
 | `steam-username` | none | The Steam user name. Keep it in a secret. |

@@ -1,0 +1,103 @@
+name: e2e
+
+# End to end in steamcmd mode (docs/spec/v1.md, section 13; experiment E4):
+# the action itself, with a pdx-ws built from this commit, updates the E2E
+# test item from tests/fixtures/e2e, then steamcmd downloads the item again and
+# its files are compared with the published copy.
+#
+# The item is EU4 item 3823619285, owned by @s-tyda and Unlisted. The fixture
+# sets no visibility, description or preview, so only the content, the title
+# and a change note change. Every job waits for a reviewer of the
+# steam-workshop-e2e environment, which holds STEAM_USERNAME and
+# STEAM_SESSION. release.yml dispatches this workflow on the release-please
+# pull request; it can also be run by hand.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e
+  cancel-in-progress: false
+
+env:
+  ITEM_ID: "3823619285"
+  APP_ID: "236850"
+
+jobs:
+  steamcmd:
+    strategy:
+      fail-fast: true
+      # One at a time: both jobs update the same item.
+      max-parallel: 1
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    environment: steam-workshop-e2e
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Rust toolchain
+        shell: bash
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Build pdx-ws
+        shell: bash
+        run: |
+          cargo build --locked
+          bin=target/debug/pdx-ws
+          if [ "$RUNNER_OS" = Windows ]; then bin=$bin.exe; fi
+          # On Linux pdx-ws loads libsteam_api.so from its own folder, as in
+          # the release archive (Windows delay-loads steam_api64.dll).
+          if [ "$RUNNER_OS" = Linux ]; then
+            cp "$(find target/debug/build -name libsteam_api.so | head -n 1)" target/debug/
+          fi
+          echo "PDX_WS_BIN=$bin" >> "$GITHUB_ENV"
+
+      # A file that differs on every run, so the download shows this run's
+      # content arrived.
+      - name: Stamp the fixture mod
+        shell: bash
+        run: |
+          mkdir -p tests/fixtures/e2e/e2e
+          printf 'run %s attempt %s\ncommit %s\nrunner %s\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" "$RUNNER_OS" \
+            > tests/fixtures/e2e/e2e/run.txt
+          cat tests/fixtures/e2e/e2e/run.txt
+
+      - name: Publish with the action
+        id: publish
+        uses: ./
+        with:
+          config: tests/fixtures/e2e/workshop.toml
+          mode: steamcmd
+          steam-username: ${{ secrets.STEAM_USERNAME }}
+          steam-session: ${{ secrets.STEAM_SESSION }}
+          change-note: "E2E on ${{ runner.os }}: run ${{ github.run_id }}, commit ${{ github.sha }}"
+          pdx-ws-path: ${{ env.PDX_WS_BIN }}
+
+      - name: Check the outputs
+        shell: bash
+        env:
+          OUT_ITEM_ID: ${{ steps.publish.outputs.item-id }}
+          OUT_ITEM_URL: ${{ steps.publish.outputs.item-url }}
+        run: |
+          test "$OUT_ITEM_ID" = "$ITEM_ID"
+          test "$OUT_ITEM_URL" = "https://steamcommunity.com/sharedfiles/filedetails/?id=$ITEM_ID"
+
+      - name: Download the item and compare
+        shell: bash
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_SESSION: ${{ secrets.STEAM_SESSION }}
+        run: |
+          python=python3
+          if [ "$RUNNER_OS" = Windows ]; then python=python; fi
+          "$python" scripts/e2e/download_and_compare.py \
+            --app "$APP_ID" --item "$ITEM_ID" --mod tests/fixtures/e2e
