@@ -16,6 +16,7 @@ pub mod item_id;
 pub mod metadata;
 pub mod mods;
 pub mod plan;
+pub mod steamcmd;
 
 pub use error::Error;
 

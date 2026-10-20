@@ -1,0 +1,17 @@
+exit=0
+Redirecting stderr to '/home/runner/Steam/logs/stderr.txt'
+Logging directory: '/home/runner/Steam/logs'
+UpdateUI: skip show logo
+Steam Console Client (c) Valve Corporation - version 1791918946
+-- type 'quit' to exit --
+Loading Steam API...^[[0mOK
+^[[0m^[[1mLogging in using cached credentials.
+^[[0mLogging in user '{user}' [U:1:12345678] to Steam Public...^[[0mOK
+^[[0mWaiting for client config...^[[0mOK
+^[[0mWaiting for user info...^[[0mWaiting for compat in post-logon took: 0.150349sOK
+^[[0m
+Preparing update...^[[0m
+Preparing content...^[[0m
+Uploading content...^[[0m
+Committing update...^[[0mSuccess.^[[0mUnloading Steam API...^[[0mOK
+^[[0msteamcmd.sh[2441]: Starting  /home/runner/work/_temp/e4/steamcmd/linux32/steamcmd

@@ -1,0 +1,14 @@
+exit=5
+Redirecting stderr to '/home/runner/Steam/logs/stderr.txt'
+Logging directory: '/home/runner/Steam/logs'
+UpdateUI: skip show logo
+Steam Console Client (c) Valve Corporation - version 1791918946
+-- type 'quit' to exit --
+Loading Steam API...^[[0mOK
+^[[0m^[[1mCached credentials not found.
+^[[0m
+password: ^[[0m^[[1m
+Proceeding with login using username/password.
+^[[0mLogging in user '{user}' [U:1:12345678] to Steam Public...^[[0mERROR (Invalid Password)
+^[[0mUnloading Steam API...^[[0mOK
+^[[0msteamcmd.sh[2552]: Starting  /home/runner/work/_temp/e4/steamcmd/linux32/steamcmd
