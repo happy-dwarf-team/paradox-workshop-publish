@@ -13,6 +13,13 @@ use crate::plan::{ModPlan, Plan, Warning, WriteBack};
 use crate::steamcmd::session::Credentials;
 use crate::steamcmd::{self, PublishOptions, Published, Steamcmd};
 
+/// The warning code of an [`Outcome::Unchanged`] result.
+pub const UNCHANGED: &str = "unchanged";
+
+/// What an [`Outcome::Unchanged`] result means for the modder.
+pub const UNCHANGED_MESSAGE: &str = "Steam found no content change and kept the item's current \
+     version, so its update date stays and this change note was not recorded";
+
 /// The version of the `publish --json` format.
 pub const JSON_SCHEMA: u32 = 1;
 
@@ -51,6 +58,9 @@ pub struct ModResult {
 pub enum Outcome {
     /// The existing item was updated.
     Published,
+    /// Steam found no content change and kept the item's current version,
+    /// so the change note was not recorded (issue #39). Not a failure.
+    Unchanged,
     /// A new item was created and published (`--allow-create`).
     Created,
     Failed,
@@ -62,6 +72,7 @@ impl Outcome {
     pub fn as_str(self) -> &'static str {
         match self {
             Outcome::Published => "published",
+            Outcome::Unchanged => "unchanged",
             Outcome::Created => "created",
             Outcome::Failed => "failed",
             Outcome::Skipped => "skipped",
@@ -141,10 +152,18 @@ pub fn run<E: PublishError>(
             Ok(published) => {
                 let outcome = if published.created {
                     Outcome::Created
+                } else if published.unchanged {
+                    Outcome::Unchanged
                 } else {
                     Outcome::Published
                 };
                 let mut result = result(module, outcome, None);
+                if outcome == Outcome::Unchanged {
+                    result.warnings.push(Warning {
+                        code: UNCHANGED,
+                        message: UNCHANGED_MESSAGE.to_owned(),
+                    });
+                }
                 result.item_id = Some(published.item_id);
                 result.url = Some(published.item_id.url());
                 if published.created {
@@ -237,6 +256,9 @@ impl fmt::Display for Report {
             if let Some(error) = &result.error {
                 writeln!(f, "{indent}{error}")?;
             }
+            if result.outcome == Outcome::Unchanged {
+                writeln!(f, "{indent}{UNCHANGED_MESSAGE}")?;
+            }
             for detail in &result.details {
                 writeln!(f, "{indent}  {detail}")?;
             }
@@ -252,8 +274,9 @@ impl fmt::Display for Report {
         }
         writeln!(
             f,
-            "{} published, {} created, {} failed, {} skipped",
+            "{} published, {} unchanged, {} created, {} failed, {} skipped",
             self.count(Outcome::Published),
+            self.count(Outcome::Unchanged),
             self.count(Outcome::Created),
             self.count(Outcome::Failed),
             self.count(Outcome::Skipped)
@@ -290,6 +313,7 @@ mod tests {
         Ok(Published {
             item_id: module.item.id.unwrap(),
             created: false,
+            unchanged: false,
         })
     }
 
@@ -389,6 +413,45 @@ mod tests {
     }
 
     #[test]
+    fn an_unchanged_publish_is_reported_but_does_not_fail() {
+        let (_dir, plan) = three_mods();
+        let report = run(&plan, false, |module| {
+            Ok::<_, steamcmd::Error>(Published {
+                item_id: module.item.id.unwrap(),
+                created: false,
+                unchanged: module.id.as_deref() == Some("two"),
+            })
+        });
+        assert_eq!(
+            report
+                .mods
+                .iter()
+                .map(|result| result.outcome)
+                .collect::<Vec<_>>(),
+            [Outcome::Published, Outcome::Unchanged, Outcome::Published]
+        );
+        assert_eq!(report.exit_code(), exit::SUCCESS);
+        let two = &report.mods[1];
+        assert!(two.error.is_none());
+        let warning = two.warnings.last().unwrap();
+        assert_eq!(warning.code, UNCHANGED);
+        assert_eq!(warning.message, UNCHANGED_MESSAGE);
+
+        let text = report.to_string();
+        assert!(text.contains(UNCHANGED_MESSAGE), "{text}");
+        assert!(text.ends_with("2 published, 1 unchanged, 0 created, 0 failed, 0 skipped\n"));
+        let json = serde_json::to_value(&report).unwrap();
+        assert_eq!(json["mods"][1]["outcome"], "unchanged");
+        let codes: Vec<_> = json["mods"][1]["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|warning| warning["code"].as_str().unwrap())
+            .collect();
+        assert!(codes.contains(&"unchanged"), "{codes:?}");
+    }
+
+    #[test]
     fn created_items_carry_their_write_backs() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(
@@ -403,6 +466,7 @@ mod tests {
             Ok::<_, steamcmd::Error>(Published {
                 item_id: ItemId::try_from(555).unwrap(),
                 created: true,
+                unchanged: false,
             })
         });
         let result = &report.mods[0];
@@ -414,7 +478,7 @@ mod tests {
             "Mod  Result     Workshop item\n\
              .    created    https://steamcommunity.com/sharedfiles/filedetails/?id=555\n     \
              set remote_file_id to 555 in descriptor.mod and commit it\n\
-             0 published, 1 created, 0 failed, 0 skipped\n"
+             0 published, 0 unchanged, 1 created, 0 failed, 0 skipped\n"
         );
     }
 
@@ -433,7 +497,7 @@ mod tests {
                  ERROR! Build for workshop item has no content\n\
                  three  skipped    {}\n       \
                  not attempted: --fail-fast stopped after mod `two` failed\n\
-                 1 published, 0 created, 1 failed, 1 skipped\n",
+                 1 published, 0 unchanged, 0 created, 1 failed, 1 skipped\n",
                 url(101),
                 url(102),
                 url(103)

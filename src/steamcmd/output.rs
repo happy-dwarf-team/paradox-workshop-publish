@@ -115,6 +115,36 @@ fn created_id(output: &str) -> Option<ItemId> {
     digits.parse().ok()
 }
 
+/// Whether a successful `workshop_build_item` made a new version, from
+/// steamcmd's logs. stdout is the same either way (issue #39).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContentChange {
+    /// `Uploaded new content ( ManifestID … )` (`workshop_log.txt`) or
+    /// `Success! New manifestID … created` (`depot_build_<appid>.log`).
+    New,
+    /// `No content change detected for item …` or `Success! Previous
+    /// manifestID … reused, no chunks uploaded.`: Steam kept the item's
+    /// version and did not record the change note.
+    Unchanged,
+    /// Neither, e.g. the logs are missing.
+    Unknown,
+}
+
+/// Reads [`ContentChange`] from the text of the steamcmd logs.
+pub fn content_change(logs: &str) -> ContentChange {
+    let unchanged = logs.contains("No content change detected")
+        || logs
+            .lines()
+            .any(|line| line.contains("Previous manifestID") && line.contains("reused"));
+    if unchanged {
+        ContentChange::Unchanged
+    } else if logs.contains("Uploaded new content") || logs.contains("New manifestID") {
+        ContentChange::New
+    } else {
+        ContentChange::Unknown
+    }
+}
+
 /// The lines worth showing when a run fails: steamcmd's own `ERROR` lines.
 pub fn error_lines(output: &str) -> Vec<String> {
     output
@@ -198,6 +228,27 @@ mod tests {
             classify(Some(0), "Steam Guard code:"),
             Signal::SessionRejected { .. }
         ));
+    }
+
+    #[test]
+    fn reads_whether_steam_made_a_new_version() {
+        // The logs of E2E run 39497323643: new content, then the same again.
+        let new = "workshop_log.txt: [2026-10-20 21:07:07] [AppID 236850] Uploaded new content ( ManifestID 4390425272313943695 ) for item 3823619285.\n\
+                   depot_build_236850.log: [2026-10-20 21:07:07]: Success! New manifestID 4390425272313943695 created and 1 new chunks uploaded.";
+        let same = "workshop_log.txt: [2026-10-20 21:07:44] [AppID 236850] No content change detected for item 3823619285\n\
+                    depot_build_236850.log: [2026-10-20 21:07:44]: Success! Previous manifestID 4390425272313943695 reused, no chunks uploaded.";
+        assert_eq!(content_change(new), ContentChange::New);
+        assert_eq!(content_change(same), ContentChange::Unchanged);
+        // Either log alone is enough.
+        assert_eq!(
+            content_change(same.lines().nth(1).unwrap()),
+            ContentChange::Unchanged
+        );
+        assert_eq!(
+            content_change(new.lines().next().unwrap()),
+            ContentChange::New
+        );
+        assert_eq!(content_change(""), ContentChange::Unknown);
     }
 
     #[test]

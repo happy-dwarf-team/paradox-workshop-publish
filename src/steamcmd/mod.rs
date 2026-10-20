@@ -86,6 +86,9 @@ pub struct Published {
     pub item_id: ItemId,
     /// The item was created by this publish (`--allow-create`).
     pub created: bool,
+    /// Steam found no content change and kept the item's current version,
+    /// so the change note was not recorded (issue #39).
+    pub unchanged: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -329,6 +332,14 @@ impl Steamcmd {
         let text = output::strip_ansi(&run.lines.join("\n"));
         match output::classify(run.code, &text) {
             Signal::Success { .. } => {
+                // steamcmd prints the same lines whether or not Steam made a
+                // new version (issue #39); its logs say which.
+                let logs = self.log_lines(plan.app_id, user);
+                for line in &logs {
+                    log(line);
+                }
+                let unchanged =
+                    output::content_change(&logs.join("\n")) == output::ContentChange::Unchanged;
                 let written = fs::read_to_string(&vdf_path)
                     .ok()
                     .and_then(|vdf| vdf::published_file_id(&vdf))
@@ -344,6 +355,7 @@ impl Steamcmd {
                     (Some(item_id), _) => Ok(Published {
                         item_id,
                         created: item.is_none(),
+                        unchanged,
                     }),
                     (None, _) => Err(self.failure(
                         run.code,
@@ -385,22 +397,22 @@ impl Steamcmd {
             .map(|line| output::mask(line, user))
             .collect();
         for path in self.logs(app_id) {
-            let Ok(text) = fs::read(&path) else { continue };
-            let text = String::from_utf8_lossy(&text);
-            let lines: Vec<_> = text
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .collect();
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
-            for line in &lines[lines.len().saturating_sub(LOG_TAIL)..] {
-                details.push(format!("{name}: {}", output::mask(line.trim(), user)));
-            }
+            let lines = log_file_lines(&path, user);
+            details.extend_from_slice(&lines[lines.len().saturating_sub(LOG_TAIL)..]);
         }
         Error::Failed {
             code,
             summary,
             details,
         }
+    }
+
+    /// Every line of this run's steamcmd logs, as `<file>: <line>`, masked.
+    fn log_lines(&self, app_id: u32, user: &str) -> Vec<String> {
+        self.logs(app_id)
+            .iter()
+            .flat_map(|path| log_file_lines(path, user))
+            .collect()
     }
 
     /// `depot_build_<appid>.log` and `workshop_log.txt` anywhere in the
@@ -429,6 +441,19 @@ fn describe(code: Option<i32>) -> String {
         Some(code) => format!("exit {code}"),
         None => "no exit code".to_owned(),
     }
+}
+
+/// The non-empty lines of one steamcmd log, as `<file>: <line>`, masked.
+fn log_file_lines(path: &Path, user: &str) -> Vec<String> {
+    let Ok(text) = fs::read(path) else {
+        return Vec::new();
+    };
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    String::from_utf8_lossy(&text)
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| format!("{name}: {}", output::mask(line.trim(), user)))
+        .collect()
 }
 
 fn find_files(dir: &Path, names: &[String], found: &mut Vec<PathBuf>) {

@@ -1,0 +1,9 @@
+[2026-10-20 21:07:41]: Building file listing for depot 236850 ...
+[2026-10-20 21:07:41]: Found 4 files for mapping: /home/runner/work/_temp/pdx-ws.LZgKjG/tmp/pdx-ws-UynLdz * -> .
+[2026-10-20 21:07:41]: Found 4 files (0 MB) for depot 236850
+[2026-10-20 21:07:42]: Building depot 236850, baseline manifest 4390425272313943695 (4 files)
+[2026-10-20 21:07:42]: Found 3 new chunks ( 3 used previously ) for depot 236850, took 0 minutes, 0 seconds
+[2026-10-20 21:07:42]: Changes to baseline manifest 4390425272313943695 :
+[2026-10-20 21:07:42]: Summary: 0 files added (0 bytes), 0 files changed (0 bytes), 0 files removed (0 bytes)
+[2026-10-20 21:07:43]: Uploading new manifest to depot-ingest.discovery.steamserver.net (handle 2395481045260982072, 742 bytes).
+[2026-10-20 21:07:44]: Success! Previous manifestID 4390425272313943695 reused, no chunks uploaded.
