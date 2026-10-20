@@ -33,6 +33,7 @@ fn plan_prints_text() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("Title:          Fixture Mod"), "{stdout}");
     assert!(stdout.contains("descriptor.mod (without path)"), "{stdout}");
+    assert!(stdout.contains("changes the EU4 checksum"), "{stdout}");
 }
 
 #[test]

@@ -71,8 +71,8 @@ fn eu4_plan_lists_the_published_copy() {
     let preview = plan.metadata.preview.as_ref().unwrap();
     assert_eq!((preview.path.as_str(), preview.size), ("thumbnail.png", 69));
     assert!(plan.write_backs.is_empty());
-    assert!(matches!(plan.checksum, ChecksumReport::NotChecked { .. }));
-    assert_eq!(codes(&plan), ["not-implemented"]);
+    assert!(matches!(plan.checksum, ChecksumReport::Changes { .. }));
+    assert_eq!(codes(&plan), ["not-implemented", "checksum"]);
 }
 
 #[test]
