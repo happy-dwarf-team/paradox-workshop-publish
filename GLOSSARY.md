@@ -15,3 +15,15 @@ _Avoid_: upload, listing, Workshop mod
 **Publish**:
 Create or update a Workshop item from a mod.
 _Avoid_: upload, deploy, release (as synonyms)
+
+**Game profile**:
+What publishing needs to know about one game: its Steam app ID, its descriptor format, where its thumbnail lives and its game-specific checks.
+_Avoid_: game config, game settings
+
+**Publish plan**:
+Everything one publish will do, computed before any upload: the files, the Workshop metadata, the Workshop item it targets, the warnings, and the changes to write back into the mod.
+_Avoid_: manifest, job, build
+
+**Mode**:
+How a publish plan reaches Steam: `steamcmd` (a cached steamcmd session, for hosted CI runners) or `client` (the logged-in Steam client, for a modder's computer or a self-hosted runner). Modes are named by mechanism, never by where they run.
+_Avoid_: CI mode, local mode, backend
