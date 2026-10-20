@@ -1,17 +1,27 @@
-[workspace]
-# Listed explicitly: release-please's rust strategy bumps the version of each
-# member named here (and Cargo.lock), so every crate shares the release version.
-members = ["crates/pdx-ws"]
-resolver = "3"
-
-[workspace.package]
+[package]
+name = "pdx-ws"
+# Set by release-please; 0.0.0 until the first release (0.1.0).
+version = "0.0.0"
+description = "Publish Paradox Interactive game mods to the Steam Workshop"
 edition = "2024"
 rust-version = "1.99"
 license = "MIT"
 repository = "https://github.com/happy-dwarf-team/paradox-workshop-publish"
 
+# pdx-ws is the workspace root. release-please's rust strategy needs a package
+# here; it bumps the version of every member below (and Cargo.lock) together,
+# so further crates under crates/ share the release version.
+[workspace]
+members = []
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
 
 # The release-archive build used by cargo-dist (dist-workspace.toml).
 [profile.dist]
