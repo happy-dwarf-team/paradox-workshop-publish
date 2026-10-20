@@ -1,0 +1,3 @@
+# Workshop items are created in `client` mode; `steamcmd` mode publishes releases
+
+`steamcmd +workshop_build_item` cannot set Workshop tags: in experiment E4 an undocumented `tags` key was accepted, yet the item ended up with no tags. Hosted CI runners have no Steam client for `ISteamUGC::SetItemTags`, and installing one there was rejected as too fragile. So a modder creates the Workshop item once in `client` mode, with tags, title and preview, and hosted CI then publishes releases in `steamcmd` mode (content, change note and optionally the description). When a release changes the descriptor's tags, the publish plan warns that tags must be synced in `client` mode. `client` mode on a self-hosted runner can do everything and needs no such split.
