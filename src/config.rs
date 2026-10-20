@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::game::Game;
@@ -18,6 +18,8 @@ pub const FILE_NAME: &str = "workshop.toml";
 /// A validated `workshop.toml`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Config {
+    /// The config file itself.
+    pub file: PathBuf,
     /// The folder that holds `workshop.toml`; mod paths are relative to it.
     pub base_dir: PathBuf,
     /// The `[[mod]]` tables in file order, with `[defaults]` applied.
@@ -57,13 +59,25 @@ fn label(id: Option<&str>, path: &Path) -> String {
 }
 
 /// The Workshop item's visibility.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Visibility {
     Public,
     Friends,
     Private,
     Unlisted,
+}
+
+impl Visibility {
+    /// The `workshop.toml` value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Visibility::Public => "public",
+            Visibility::Friends => "friends",
+            Visibility::Private => "private",
+            Visibility::Unlisted => "unlisted",
+        }
+    }
 }
 
 /// What a checksum change does to a publish (spec section 8).
@@ -149,6 +163,10 @@ impl Config {
         std::str::from_utf8(&bytes)
             .map_err(|_| ConfigError::NotUtf8)
             .and_then(|text| Config::parse(text, base_dir))
+            .map(|config| Config {
+                file: path.to_owned(),
+                ..config
+            })
             .map_err(|source| Error::Config {
                 path: path.to_owned(),
                 source,
@@ -184,7 +202,11 @@ impl Config {
             }
             mods.push(apply_defaults(&raw.defaults, raw_mod)?);
         }
-        Ok(Config { base_dir, mods })
+        Ok(Config {
+            file: base_dir.join(FILE_NAME),
+            base_dir,
+            mods,
+        })
     }
 }
 

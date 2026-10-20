@@ -26,6 +26,8 @@ pub struct DescriptorMod {
     /// Every entry in file order, with its place in the text, so the
     /// published copy can drop local-only keys and add `remote_file_id`.
     pub entries: Vec<Entry>,
+    /// The file's text, which [`Entry::span`] indexes.
+    pub text: String,
 }
 
 /// One `key=value` entry.
@@ -156,7 +158,93 @@ pub fn parse(bytes: &[u8]) -> Result<DescriptorMod, DescriptorError> {
         replace_paths,
         remote_file_id,
         entries,
+        text: text.to_owned(),
     })
+}
+
+/// Keys that only make sense on the modder's computer, left out of the
+/// published copy (spec section 6).
+pub const LOCAL_ONLY_KEYS: [&str; 3] = ["path", "archive", "user_dir"];
+
+/// The `descriptor.mod` of the published copy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublishedDescriptor {
+    pub text: String,
+    /// Keys left out, in file order.
+    pub removed: Vec<String>,
+    /// Keys added at the end.
+    pub added: Vec<String>,
+}
+
+impl DescriptorMod {
+    /// The text for the published copy: without [`LOCAL_ONLY_KEYS`] and with
+    /// `remote_file_id` set to `item_id` when the item exists. Everything
+    /// else, comments and layout included, stays as it is.
+    pub fn for_published_copy(&self, item_id: Option<ItemId>) -> PublishedDescriptor {
+        let mut removed = Vec::new();
+        let mut cuts = Vec::new();
+        for entry in &self.entries {
+            let stale_id = entry.key == "remote_file_id" && self.remote_file_id != item_id;
+            if LOCAL_ONLY_KEYS.contains(&entry.key.as_str()) || stale_id {
+                if !removed.contains(&entry.key) {
+                    removed.push(entry.key.clone());
+                }
+                cuts.push(line_cut(&self.text, entry.span.clone()));
+            }
+        }
+
+        let mut text = String::with_capacity(self.text.len() + 32);
+        let mut pos = 0;
+        for cut in cuts {
+            text.push_str(&self.text[pos..cut.start]);
+            pos = cut.end;
+        }
+        text.push_str(&self.text[pos..]);
+
+        let mut added = Vec::new();
+        if let Some(id) = item_id
+            && self.remote_file_id != Some(id)
+        {
+            let newline = if self.text.contains("\r\n") {
+                "\r\n"
+            } else {
+                "\n"
+            };
+            if !text.is_empty() && !text.ends_with('\n') {
+                text.push_str(newline);
+            }
+            text.push_str(&format!("remote_file_id=\"{id}\"{newline}"));
+            added.push("remote_file_id".to_owned());
+        }
+        PublishedDescriptor {
+            text,
+            removed,
+            added,
+        }
+    }
+}
+
+/// The range to cut for an entry: its whole line when nothing else is on
+/// it, otherwise just the entry.
+fn line_cut(text: &str, span: Range<usize>) -> Range<usize> {
+    let bytes = text.as_bytes();
+    let mut start = span.start;
+    while start > 0 && matches!(bytes[start - 1], b' ' | b'\t') {
+        start -= 1;
+    }
+    let mut end = span.end;
+    while end < bytes.len() && matches!(bytes[end], b' ' | b'\t') {
+        end += 1;
+    }
+    let line_start = start == 0 || bytes[start - 1] == b'\n';
+    if line_start && (end == bytes.len() || bytes[end] == b'\n') {
+        start..(end + 1).min(bytes.len())
+    } else if line_start && bytes[end..].starts_with(b"\r\n") {
+        start..end + 2
+    } else {
+        // Another entry shares the line: cut the entry and the blanks after it.
+        span.start..end
+    }
 }
 
 fn text_value(entry: &Entry) -> Result<String, DescriptorError> {
@@ -496,5 +584,45 @@ remote_file_id="2948217283"
         ] {
             assert_eq!(error(text), expected, "{text:?}");
         }
+    }
+
+    fn published(text: &str, item_id: Option<u64>) -> PublishedDescriptor {
+        let descriptor = parse(text.as_bytes()).unwrap();
+        descriptor.for_published_copy(item_id.map(|id| ItemId::try_from(id).unwrap()))
+    }
+
+    #[test]
+    fn the_published_copy_drops_local_keys_and_keeps_the_rest() {
+        let text = "# My mod\nname=\"A\"\npath=\"C:/Users/someone/mod\"\n\tarchive=\"a.zip\"  \ntags={ \"x\" }\nuser_dir=\"a\"\nremote_file_id=\"7\"\n";
+        let copy = published(text, Some(7));
+        assert_eq!(
+            copy.text,
+            "# My mod\nname=\"A\"\ntags={ \"x\" }\nremote_file_id=\"7\"\n"
+        );
+        assert_eq!(copy.removed, ["path", "archive", "user_dir"]);
+        assert!(copy.added.is_empty());
+    }
+
+    #[test]
+    fn the_published_copy_gains_remote_file_id() {
+        let copy = published("name=\"A\"\r\npath=\"x\"\r\n", Some(42));
+        assert_eq!(copy.text, "name=\"A\"\r\nremote_file_id=\"42\"\r\n");
+        assert_eq!(copy.added, ["remote_file_id"]);
+
+        let copy = published("name=\"A\"", Some(42));
+        assert_eq!(copy.text, "name=\"A\"\nremote_file_id=\"42\"\n");
+    }
+
+    #[test]
+    fn entries_sharing_a_line_are_cut_alone() {
+        let copy = published("name=\"A\" path=\"x\" version=\"1\"\n", None);
+        assert_eq!(copy.text, "name=\"A\" version=\"1\"\n");
+    }
+
+    #[test]
+    fn a_new_item_has_no_remote_file_id() {
+        let copy = published("name=\"A\"\n", None);
+        assert_eq!(copy.text, "name=\"A\"\n");
+        assert!(copy.removed.is_empty() && copy.added.is_empty());
     }
 }

@@ -3,7 +3,7 @@
 use std::fmt;
 use std::str::FromStr;
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// A game that `pdx-ws` can publish mods for, named by its `workshop.toml` key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -171,6 +171,12 @@ impl<'de> Deserialize<'de> for Game {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let key = String::deserialize(deserializer)?;
         key.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl Serialize for Game {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.key())
     }
 }
 

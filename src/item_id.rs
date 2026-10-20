@@ -4,12 +4,12 @@ use std::fmt;
 use std::num::NonZeroU64;
 use std::str::FromStr;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::game::DescriptorFormat;
 
 /// A Workshop item's `publishedfileid`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
 #[serde(try_from = "u64")]
 pub struct ItemId(NonZeroU64);
 
@@ -44,6 +44,13 @@ impl FromStr for ItemId {
     }
 }
 
+impl ItemId {
+    /// The item's Workshop page.
+    pub fn url(self) -> String {
+        format!("https://steamcommunity.com/sharedfiles/filedetails/?id={self}")
+    }
+}
+
 impl fmt::Display for ItemId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
@@ -51,7 +58,8 @@ impl fmt::Display for ItemId {
 }
 
 /// Where a mod's item ID was found.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ItemIdSource {
     /// `remote_file_id` in `descriptor.mod`.
     RemoteFileId,
