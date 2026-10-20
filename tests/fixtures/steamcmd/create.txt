@@ -1,0 +1,18 @@
+exit=0
+Steam Console Client (c) Valve Corporation - version 1791918946
+-- type 'quit' to exit --
+Loading Steam API...OK
+Logging in using cached credentials.
+Logging in user '{user}' [U:1:12345678] to Steam Public...OK
+Waiting for client config...OK
+Waiting for user info...OK
+Create new workshop item ( PublishFileID 3823257732).
+
+Preparing update...
+Preparing content...
+Uploading content...
+Uploading preview image...
+Committing update...Success.Unloading Steam API...OK
+Redirecting stderr to 'D:\a\_temp\e4\steamcmd\logs\stderr.txt'
+Logging directory: 'D:\a\_temp\e4\steamcmd/logs'
+CWorkThreadPool::~CWorkThreadPool: work processing queue not empty: 2 items discarded.

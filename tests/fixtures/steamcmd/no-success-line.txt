@@ -1,0 +1,7 @@
+exit=0
+Steam Console Client (c) Valve Corporation - version 1791918946
+-- type 'quit' to exit --
+Loading Steam API...OK
+Logging in using cached credentials.
+Logging in user '{user}' [U:1:12345678] to Steam Public...OK
+Unloading Steam API...OK

@@ -1,15 +1,18 @@
 use std::process::{Command, Output};
 
 fn pdx_ws(args: &[&str]) -> Output {
+    // Without credentials, `publish` stops before it would install steamcmd.
     Command::new(env!("CARGO_BIN_EXE_pdx-ws"))
         .args(args)
+        .env_remove("PDX_WS_STEAM_USERNAME")
+        .env_remove("PDX_WS_STEAM_SESSION")
         .output()
         .expect("pdx-ws runs")
 }
 
 #[test]
 fn unimplemented_commands_exit_with_code_2() {
-    for args in [&["publish"][..], &["init"], &["session", "export"]] {
+    for args in [&["init"][..], &["session", "export"]] {
         let output = pdx_ws(args);
         assert_eq!(output.status.code(), Some(2), "pdx-ws {args:?}");
         assert!(output.stdout.is_empty(), "pdx-ws {args:?} wrote to stdout");
@@ -107,6 +110,47 @@ fn plan_errors_exit_with_code_2() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.starts_with("error: "), "{stderr}");
     }
+}
+
+#[test]
+fn publish_refuses_a_missing_item_before_anything_else() {
+    let config = fixture_config("eu4-unpublished");
+    let output = pdx_ws(&["publish", "--config", &config]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("run `pdx-ws init` in client mode first"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn publish_without_a_session_exits_with_3() {
+    let config = fixture_config("eu4");
+    let output = pdx_ws(&["publish", "--config", &config]);
+    assert_eq!(output.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("PDX_WS_STEAM_USERNAME is not set"),
+        "{stderr}"
+    );
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pdx-ws"))
+        .args(["publish", "--config", &config])
+        .env("PDX_WS_STEAM_USERNAME", "modder")
+        .env_remove("PDX_WS_STEAM_SESSION")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("pdx-ws session export"), "{stderr}");
+}
+
+#[test]
+fn client_mode_is_not_implemented_yet() {
+    let config = fixture_config("eu4");
+    let output = pdx_ws(&["publish", "--config", &config, "--mode", "client"]);
+    assert_eq!(output.status.code(), Some(2));
 }
 
 #[test]
