@@ -1,0 +1,36 @@
+# Experiment E4 (issue #6): throwaway workflow on the e4-run branch; never merged.
+# Each push that changes e4/run.json runs once, after approval in the e4 environment.
+name: E4 steamcmd publish
+on:
+  push:
+    branches: [e4-run]
+    paths: [e4/run.json]
+permissions:
+  contents: read
+concurrency:
+  group: e4
+  cancel-in-progress: false
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      os: ${{ steps.read.outputs.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: echo "os=$(jq -r .os e4/run.json)" >> "$GITHUB_OUTPUT"
+  publish:
+    needs: plan
+    runs-on: ${{ needs.plan.outputs.os }}
+    environment: e4
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish, download and compare
+        shell: bash
+        env:
+          STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+          STEAM_CONFIG_VDF: ${{ secrets.STEAM_CONFIG_VDF }}
+        run: |
+          PY=$(command -v python3 || command -v python)
+          "$PY" e4/e4.py
