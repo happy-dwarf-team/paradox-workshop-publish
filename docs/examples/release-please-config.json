@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "include-component-in-tag": true,
+  "tag-separator": "-",
+  "packages": {
+    "mods/alpha": {
+      "component": "alpha",
+      "extra-files": [{ "type": "generic", "path": "descriptor.mod" }]
+    },
+    "mods/beta": {
+      "component": "beta",
+      "extra-files": [{ "type": "generic", "path": "descriptor.mod" }]
+    }
+  }
+}

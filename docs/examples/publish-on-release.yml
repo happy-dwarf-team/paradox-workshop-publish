@@ -1,0 +1,47 @@
+# Publish the mod to the Steam Workshop when a GitHub release is published.
+# Copy to .github/workflows/ in the mod's repository.
+#
+# Needs a `steam-workshop` environment with the secrets STEAM_SESSION and
+# STEAM_USERNAME (docs/guide/setup.md). Recommended: required reviewers on the
+# environment, and deployment tags limited to v*.
+#
+# A release published from the GitHub web interface or `gh release create`
+# starts this workflow. One created by another workflow with the default
+# GITHUB_TOKEN does not; publish from that workflow instead
+# (release-please-monorepo.yml shows how).
+
+name: publish
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: steam-workshop
+    concurrency:
+      group: steam-workshop
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Coming in 0.1.0: the action needs a pdx-ws release to download.
+      - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0
+        id: workshop
+        with:
+          steam-username: ${{ secrets.STEAM_USERNAME }}
+          steam-session: ${{ secrets.STEAM_SESSION }}
+          # The release notes become the Workshop change note. When they are
+          # empty, the changelog section for the descriptor version is used.
+          change-note: ${{ github.event.release.body }}
+
+      - name: Link the Workshop item
+        env:
+          ITEM_URL: ${{ steps.workshop.outputs.item-url }}
+        run: echo "Published to $ITEM_URL"

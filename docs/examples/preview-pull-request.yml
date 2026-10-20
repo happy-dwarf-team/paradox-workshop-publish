@@ -1,0 +1,28 @@
+# Preview a release on every pull request: the job summary shows the files,
+# the rendered BBCode description and change note, and any checksum warning.
+# Copy to .github/workflows/ in the mod's repository.
+#
+# pull_request runs of the action are always dry runs: nothing is sent to
+# Steam, and no secrets or environment are needed. Never run the action on
+# pull_request_target; it refuses to.
+
+name: workshop preview
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # Coming in 0.1.0: the action needs a pdx-ws release to download.
+      - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0
+        with:
+          dry-run: true
