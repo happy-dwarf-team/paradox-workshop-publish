@@ -59,7 +59,8 @@ pub enum Signal {
     /// from `Create new workshop item ( PublishFileID <id>)`.
     Success { created: Option<ItemId> },
     /// Steam refused the cached login: exit 5 with `Cached credentials not
-    /// found` or `Invalid Password`, or a Steam Guard prompt.
+    /// found` or `Invalid Password`, `License expired`, or a Steam Guard
+    /// prompt.
     SessionRejected { reason: String },
     /// Exit 9, e.g. `ERROR! Build for workshop item has no content`.
     BuildFailed,
@@ -78,6 +79,12 @@ pub fn classify(code: Option<i32>, output: &str) -> Signal {
                 "steamcmd asked for a code (`{}`)",
                 prompt.trim_end_matches(':')
             ),
+        };
+    }
+    // Issue #9 names `License expired` as a dead session too.
+    if output.contains("License expired") {
+        return Signal::SessionRejected {
+            reason: "License expired".to_owned(),
         };
     }
     if code == Some(5) {
@@ -180,6 +187,12 @@ mod tests {
         assert_eq!(
             classify(Some(5), "ERROR (Rate Limit Exceeded)"),
             Signal::Failed
+        );
+        assert_eq!(
+            classify(Some(5), "ERROR (License expired)"),
+            Signal::SessionRejected {
+                reason: "License expired".to_owned()
+            }
         );
         assert!(matches!(
             classify(Some(0), "Steam Guard code:"),
