@@ -39,3 +39,7 @@ _Avoid_: config.vdf, sentry file, token, credentials
 **Change note**:
 The text attached to one publish, shown on the Workshop item's Change Notes page.
 _Avoid_: changelog (the file in the repository), release notes (a GitHub Release), patch notes
+
+**Checksum rules**:
+Data for one game version that describes which mod files the game counts in its checksum.
+_Avoid_: manifest (Paradox's own file), whitelist
