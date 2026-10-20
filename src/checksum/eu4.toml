@@ -1,0 +1,55 @@
+# Checksum rules for Europa Universalis IV (docs/spec/v1.md, section 8).
+#
+# Which files of a mod the game counts in its checksum, in pdx-ws's own
+# format: one [[table]] per game version, each with the rules verified on a
+# real install. This is our encoding of what the game hashes, not the game's
+# checksum_manifest.txt. Folders and extensions are lowercase and matched
+# case-insensitively; `recursive = false` counts the folder's own files only.
+
+name = "EU4"
+effect = "players lose achievements while this mod is enabled, and multiplayer partners need the same mods; ironman itself still works"
+
+[[table]]
+game_version = "1.37"
+verified_on = "1.37.5"
+source = "checksum_manifest.txt of an EU4 v1.37.5.0 Inca (491d) install (13 entries, SHA-256 2d7c64965363d0543ec61c512c4079ebbd0521acdfce9fde2590b2db1b6b7ff1), read on 2026-10-20; lab experiments E1 (files) and E5 (replace_path, issue #21)"
+
+[[table.rule]]
+folder = "common"
+recursive = true
+extensions = [".txt", ".lua"]
+
+[[table.rule]]
+folder = "events"
+recursive = true
+extensions = [".txt"]
+
+[[table.rule]]
+folder = "missions"
+recursive = true
+extensions = [".txt"]
+
+[[table.rule]]
+folder = "decisions"
+recursive = true
+extensions = [".txt"]
+
+[[table.rule]]
+folder = "history"
+recursive = true
+extensions = [".txt"]
+
+[[table.rule]]
+folder = "map"
+recursive = false
+extensions = [".txt", ".map", ".bmp", ".csv"]
+
+[[table.rule]]
+folder = "map/random"
+recursive = false
+extensions = [".lua"]
+
+[[table.rule]]
+folder = "map/random"
+recursive = true
+extensions = [".txt", ".bmp"]

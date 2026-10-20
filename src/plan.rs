@@ -1,5 +1,5 @@
 //! The publish plan: everything one publish will do, computed from the
-//! repository before anything is sent to Steam (spec sections 2, 5 and 6).
+//! repository before anything is sent to Steam (spec sections 2, 5, 6 and 8).
 
 use std::fmt;
 use std::fs;
@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::Error;
+use crate::checksum;
 use crate::config::{ChecksumSetting, Config, ModConfig, Visibility};
 use crate::copy;
 use crate::game::{DescriptorFormat, Game};
@@ -109,10 +110,33 @@ pub struct Rewrite {
 pub enum ChecksumReport {
     /// `checksum = "ignore"`.
     Ignored,
-    /// No checksum rules for this game.
+    /// No checksum rules for this game yet.
     Unavailable { reason: String },
-    /// Rules exist for the game but this version does not check them yet.
-    NotChecked { reason: String },
+    /// Nothing in the published copy or the descriptor touches checksummed
+    /// files.
+    Unchanged { rules: RulesUsed },
+    /// The published copy changes the checksum (`checksum = "warn"`; with
+    /// `"keep"` the plan fails instead).
+    Changes {
+        rules: RulesUsed,
+        /// The files that a rule matches.
+        files: Vec<String>,
+        /// The `replace_path` values that cover checksummed scope.
+        replace_paths: Vec<String>,
+    },
+}
+
+/// The checksum rule table a check used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RulesUsed {
+    /// The game versions the table applies to, e.g. `1.37`.
+    pub game_version: String,
+    pub verified_on: String,
+    pub source: String,
+    /// Why the newest table was taken, when none covers the descriptor's
+    /// supported version.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -150,6 +174,8 @@ pub enum PlanError {
         "the preview {path} is {size} bytes; Steam takes less than 1 MB ({PREVIEW_LIMIT} bytes)"
     )]
     PreviewTooLarge { path: String, size: u64 },
+    #[error("`checksum = \"keep\"`, but the published copy changes the {game} checksum: {matches}")]
+    ChecksumKept { game: String, matches: String },
 }
 
 impl Plan {
@@ -226,7 +252,7 @@ impl ModPlan {
             Descriptor::DescriptorMod(descriptor) => Some(descriptor.for_published_copy(item_id)),
             Descriptor::MetadataJson(_) => None,
         };
-        let files = selection
+        let files: Vec<PlannedFile> = selection
             .files
             .into_iter()
             .map(|(path, size)| match &published_descriptor {
@@ -301,7 +327,7 @@ impl ModPlan {
             });
         }
 
-        // Steps 4 and 5 of the implementation sequence fill these in.
+        // Step 4 of the implementation sequence fills this in.
         if module.config.description.is_some() {
             warnings.push(Warning {
                 code: "not-implemented",
@@ -310,15 +336,7 @@ impl ModPlan {
                     .to_owned(),
             });
         }
-        let checksum = match (module.config.checksum, module.config.game) {
-            (ChecksumSetting::Ignore, _) => ChecksumReport::Ignored,
-            (_, Game::Eu4) => ChecksumReport::NotChecked {
-                reason: "the EU4 checksum rules are not implemented yet".to_owned(),
-            },
-            (_, game) => ChecksumReport::Unavailable {
-                reason: format!("the checksum check is not available for {game}"),
-            },
-        };
+        let checksum = check_checksum(module, &files, &mut warnings)?;
 
         Ok(ModPlan {
             id: module.config.id.clone(),
@@ -354,6 +372,95 @@ impl ModPlan {
             None => format!("the mod at `{}`", self.path),
         }
     }
+}
+
+/// The checksum check of the published copy (spec section 8).
+fn check_checksum(
+    module: &Mod,
+    files: &[PlannedFile],
+    warnings: &mut Vec<Warning>,
+) -> Result<ChecksumReport, PlanError> {
+    let setting = module.config.checksum;
+    if setting == ChecksumSetting::Ignore {
+        return Ok(ChecksumReport::Ignored);
+    }
+    let Some(rules) = checksum::rules(module.config.game) else {
+        let reason = format!(
+            "the checksum check is not available for {} yet",
+            module.profile.name
+        );
+        if setting == ChecksumSetting::Keep {
+            warnings.push(Warning {
+                code: "checksum-unavailable",
+                message: format!("`checksum = \"keep\"` is not enforced: {reason}"),
+            });
+        }
+        return Ok(ChecksumReport::Unavailable { reason });
+    };
+
+    let supported_version = module.descriptor.supported_version();
+    let selection = rules.select(supported_version);
+    let table = selection.table;
+    let used = RulesUsed {
+        game_version: table.game_version.clone(),
+        verified_on: table.verified_on.clone(),
+        source: table.source.clone(),
+        fallback: selection.fallback.then(|| match supported_version {
+            Some(version) => format!(
+                "no {} rules cover supported_version \"{version}\"; the newest are used",
+                rules.name
+            ),
+            None => format!(
+                "the descriptor has no supported_version; the newest {} rules are used",
+                rules.name
+            ),
+        }),
+    };
+    let replace_paths: &[String] = match &module.descriptor {
+        Descriptor::DescriptorMod(descriptor) => &descriptor.replace_paths,
+        Descriptor::MetadataJson(_) => &[],
+    };
+    let findings = table.check(files.iter().map(|file| file.path.as_str()), replace_paths);
+    if !findings.changes() {
+        return Ok(ChecksumReport::Unchanged { rules: used });
+    }
+    if setting == ChecksumSetting::Keep {
+        let matches = checksum_matches(&findings.files, &findings.replace_paths);
+        let mut listed = matches
+            .iter()
+            .take(LISTED_FILES)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(", ");
+        if matches.len() > LISTED_FILES {
+            listed.push_str(&format!(" and {} more", matches.len() - LISTED_FILES));
+        }
+        return Err(PlanError::ChecksumKept {
+            game: rules.name.clone(),
+            matches: listed,
+        });
+    }
+    warnings.push(Warning {
+        code: "checksum",
+        message: format!(
+            "the published copy changes the {} checksum: {}",
+            rules.name, rules.effect
+        ),
+    });
+    Ok(ChecksumReport::Changes {
+        rules: used,
+        files: findings.files,
+        replace_paths: findings.replace_paths,
+    })
+}
+
+/// What changes the checksum, `replace_path` values first.
+fn checksum_matches(files: &[String], replace_paths: &[String]) -> Vec<String> {
+    replace_paths
+        .iter()
+        .map(|path| format!("replace_path=\"{path}\""))
+        .chain(files.iter().cloned())
+        .collect()
 }
 
 fn preview(dir: &Path, path: &str) -> Result<Option<Preview>, PlanError> {
@@ -456,10 +563,42 @@ impl fmt::Display for ModPlan {
             Some(note) => writeln!(f, "  Change note:    {note}")?,
             None => writeln!(f, "  Change note:    none")?,
         }
+        let game = checksum::rules(self.game).map_or(profile.name, |rules| rules.name.as_str());
         match &self.checksum {
             ChecksumReport::Ignored => writeln!(f, "  Checksum:       ignored")?,
-            ChecksumReport::Unavailable { reason } | ChecksumReport::NotChecked { reason } => {
+            ChecksumReport::Unavailable { reason } => {
                 writeln!(f, "  Checksum:       not checked ({reason})")?
+            }
+            ChecksumReport::Unchanged { rules } => {
+                writeln!(
+                    f,
+                    "  Checksum:       does not touch {game} checksummed files ({})",
+                    describe_rules(rules)
+                )?;
+                if let Some(fallback) = &rules.fallback {
+                    writeln!(f, "                  {fallback}")?;
+                }
+            }
+            ChecksumReport::Changes {
+                rules,
+                files,
+                replace_paths,
+            } => {
+                writeln!(
+                    f,
+                    "  Checksum:       changes the {game} checksum ({})",
+                    describe_rules(rules)
+                )?;
+                if let Some(fallback) = &rules.fallback {
+                    writeln!(f, "                  {fallback}")?;
+                }
+                let matches = checksum_matches(files, replace_paths);
+                for path in matches.iter().take(LISTED_FILES) {
+                    writeln!(f, "    {path}")?;
+                }
+                if matches.len() > LISTED_FILES {
+                    writeln!(f, "    and {} more", matches.len() - LISTED_FILES)?;
+                }
             }
         }
 
@@ -496,6 +635,13 @@ impl fmt::Display for ModPlan {
         }
         Ok(())
     }
+}
+
+fn describe_rules(rules: &RulesUsed) -> String {
+    format!(
+        "rules for {}, verified on {}",
+        rules.game_version, rules.verified_on
+    )
 }
 
 fn describe(rewrite: &Rewrite) -> String {
