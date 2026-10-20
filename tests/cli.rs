@@ -147,6 +147,32 @@ fn publish_without_a_session_exits_with_3() {
 }
 
 #[test]
+fn publish_checks_only_the_selected_mods() {
+    let config = fixture_config("multi");
+    // `beta` has no item, so publishing every mod stops before any upload.
+    let output = pdx_ws(&["publish", "--config", &config, "--fail-fast", "--json"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("error: mod `beta`: "), "{stderr}");
+
+    // `alpha` alone gets as far as the missing credentials.
+    let output = pdx_ws(&["publish", "--config", &config, "--mod", "alpha"]);
+    assert_eq!(output.status.code(), Some(3));
+}
+
+#[test]
+fn plan_shows_every_selected_mod() {
+    let config = fixture_config("multi");
+    let output = pdx_ws(&["plan", "--config", &config]);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let alpha = stdout.find("Mod `alpha`: Europa Universalis IV").unwrap();
+    let beta = stdout.find("Mod `beta`: Hearts of Iron IV").unwrap();
+    assert!(alpha < beta, "{stdout}");
+}
+
+#[test]
 fn client_mode_is_not_implemented_yet() {
     let config = fixture_config("eu4");
     let output = pdx_ws(&["publish", "--config", &config, "--mode", "client"]);
