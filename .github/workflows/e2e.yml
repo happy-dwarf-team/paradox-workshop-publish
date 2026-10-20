@@ -60,8 +60,8 @@ jobs:
           fi
           echo "PDX_WS_BIN=$bin" >> "$GITHUB_ENV"
 
-      # A file that differs on every run, so the download shows this run's
-      # content arrived.
+      # A file that differs on every run, so the first publish must make a
+      # new version and the download shows this run's content arrived.
       - name: Stamp the fixture mod
         shell: bash
         run: |
@@ -82,14 +82,44 @@ jobs:
           change-note: "E2E on ${{ runner.os }}: run ${{ github.run_id }}, commit ${{ github.sha }}"
           pdx-ws-path: ${{ env.PDX_WS_BIN }}
 
-      - name: Check the outputs
+      - name: Check that a new version was published
         shell: bash
         env:
           OUT_ITEM_ID: ${{ steps.publish.outputs.item-id }}
           OUT_ITEM_URL: ${{ steps.publish.outputs.item-url }}
+          PLAN_JSON: ${{ steps.publish.outputs.plan-json }}
         run: |
+          set -euxo pipefail
           test "$OUT_ITEM_ID" = "$ITEM_ID"
           test "$OUT_ITEM_URL" = "https://steamcommunity.com/sharedfiles/filedetails/?id=$ITEM_ID"
+          plan=$PLAN_JSON
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          test "$(jq -r '.mods[0].outcome' "$(dirname "$plan")/results.json")" = published
+
+      # The same content again: Steam keeps the version it has and drops the
+      # change note, while steamcmd still prints Success (issue #39).
+      - name: Publish the same content again
+        id: again
+        uses: ./
+        with:
+          config: tests/fixtures/e2e/workshop.toml
+          mode: steamcmd
+          steam-username: ${{ secrets.STEAM_USERNAME }}
+          steam-session: ${{ secrets.STEAM_SESSION }}
+          change-note: "E2E on ${{ runner.os }}: run ${{ github.run_id }}, unchanged re-publish"
+          pdx-ws-path: ${{ env.PDX_WS_BIN }}
+
+      - name: Check that the re-publish was reported unchanged
+        shell: bash
+        env:
+          PLAN_JSON: ${{ steps.again.outputs.plan-json }}
+        run: |
+          set -euxo pipefail
+          plan=$PLAN_JSON
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          results="$(dirname "$plan")/results.json"
+          jq . "$results"
+          test "$(jq -r '.mods[0].outcome' "$results")" = unchanged
 
       - name: Download the item and compare
         shell: bash
