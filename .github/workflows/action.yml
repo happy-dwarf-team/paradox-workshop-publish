@@ -39,6 +39,11 @@ jobs:
           cargo build --locked
           bin=target/debug/pdx-ws
           if [ "$RUNNER_OS" = Windows ]; then bin=$bin.exe; fi
+          # On Linux pdx-ws loads libsteam_api.so from its own folder, as in
+          # the release archive (Windows delay-loads steam_api64.dll).
+          if [ "$RUNNER_OS" = Linux ]; then
+            cp "$(find target/debug/build -name libsteam_api.so | head -n 1)" target/debug/
+          fi
           echo "PDX_WS_BIN=$bin" >> "$GITHUB_ENV"
 
       - name: One mod
