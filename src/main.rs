@@ -12,9 +12,9 @@ use std::process::ExitCode;
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use pdx_ws::change_note::ChangeNoteInput;
 use pdx_ws::config::{self, Config};
-use pdx_ws::copy::PublishedCopy;
 use pdx_ws::exit;
 use pdx_ws::plan::Plan;
+use pdx_ws::publish::{self, Outcome};
 use pdx_ws::steamcmd::session::Credentials;
 use pdx_ws::steamcmd::{self, PublishOptions, Steamcmd};
 
@@ -65,6 +65,13 @@ struct PublishArgs {
     /// Let `steamcmd` mode create a missing item (without tags).
     #[arg(long)]
     allow_create: bool,
+    /// Stop at the first mod that fails; by default the others are still
+    /// published.
+    #[arg(long)]
+    fail_fast: bool,
+    /// Print the per-mod results as JSON instead of a table.
+    #[arg(long)]
+    json: bool,
 }
 
 /// Which config file and which of its mods.
@@ -182,8 +189,9 @@ fn plan(args: &PlanArgs) -> Result<(), Failure> {
     Ok(())
 }
 
-/// Publishes the selected mods one after another and stops at the first
-/// failure.
+/// Publishes the selected mods one after another, then prints one result
+/// per mod. A failed mod does not stop the others unless `--fail-fast` is
+/// given; problems found before any upload stop the whole run.
 fn publish(args: &PublishArgs) -> Result<(), Failure> {
     if args.mode == Mode::Client {
         return Err(Failure {
@@ -218,28 +226,37 @@ fn publish(args: &PublishArgs) -> Result<(), Failure> {
         allow_create: args.allow_create,
         ..PublishOptions::default()
     };
-    for module in &plan.mods {
-        let label = module.label();
-        let fail = |error: steamcmd::Error| Failure::steamcmd(Some(label.clone()), &error);
-        let copy = PublishedCopy::create(module).map_err(|error| fail(error.into()))?;
-        let published = steamcmd
-            .publish(&credentials, module, copy.path(), &options, &mut log)
-            .map_err(fail)?;
-        println!(
-            "{label}: published to Workshop item {} ({})",
-            published.item_id,
-            published.item_id.url()
-        );
-        if published.created {
-            for write_back in &module.write_backs {
-                println!(
-                    "{label}: created the item; set {} to {} in {} and commit it",
-                    write_back.key, published.item_id, write_back.file
-                );
-            }
+    let report = publish::run(&plan, args.fail_fast, |module| {
+        eprintln!("Publishing {}", module.label());
+        let result = publish::through_steamcmd(&steamcmd, &credentials, module, &options, &mut log);
+        if let Err(error) = &result {
+            eprintln!("{}", Failure::steamcmd(Some(module.label()), error));
         }
+        result
+    });
+
+    let mut stdout = io::stdout().lock();
+    // A closed stdout (e.g. `| head`) does not change the exit code.
+    let _ = if args.json {
+        serde_json::to_writer_pretty(&mut stdout, &report)
+            .map_err(io::Error::from)
+            .and_then(|()| writeln!(stdout))
+    } else {
+        write!(stdout, "{report}")
+    };
+    match report.exit_code() {
+        exit::SUCCESS => Ok(()),
+        code => Err(Failure {
+            label: None,
+            message: format!(
+                "not every mod was published ({} failed, {} skipped)",
+                report.count(Outcome::Failed),
+                report.count(Outcome::Skipped)
+            ),
+            details: Vec::new(),
+            code,
+        }),
     }
-    Ok(())
 }
 
 #[cfg(test)]

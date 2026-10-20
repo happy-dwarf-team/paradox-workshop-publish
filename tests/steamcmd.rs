@@ -1,9 +1,10 @@
 //! `steamcmd` mode against a fake steamcmd that replays E4's real outputs.
 //!
 //! This test binary is its own fake: copied into a scratch steamcmd folder
-//! under steamcmd's file name, it reads `scenario` next to itself, records
-//! what it was given in `seen/`, prints the transcript and exits with its
-//! code. Nothing here talks to Steam.
+//! under steamcmd's file name, it reads `scenario` next to itself (one
+//! scenario, or one per item ID), records what it was given in `seen/`,
+//! prints the transcript and exits with its code. Nothing here talks to
+//! Steam.
 
 use std::fs;
 use std::io::Read;
@@ -16,6 +17,7 @@ use pdx_ws::change_note::ChangeNoteInput;
 use pdx_ws::config::Config;
 use pdx_ws::copy::PublishedCopy;
 use pdx_ws::plan::{ModPlan, Plan};
+use pdx_ws::publish::{self, Outcome as ModOutcome, Report};
 use pdx_ws::steamcmd::install::EXECUTABLE;
 use pdx_ws::steamcmd::session::{self, Credentials};
 use pdx_ws::steamcmd::{Error, PublishOptions, Published, Steamcmd};
@@ -57,6 +59,15 @@ fn main() -> ExitCode {
         (
             "the_self_update_accepts_exit_7",
             the_self_update_accepts_exit_7,
+        ),
+        ("every_mod_is_published", every_mod_is_published),
+        (
+            "a_failed_mod_does_not_stop_the_others",
+            a_failed_mod_does_not_stop_the_others,
+        ),
+        (
+            "fail_fast_stops_at_the_first_failure",
+            fail_fast_stops_at_the_first_failure,
         ),
     ])
 }
@@ -138,7 +149,12 @@ fn fake_steamcmd(exe: &Path) -> ExitCode {
     fs::write(seen.join("item.vdf"), &vdf_text).unwrap();
 
     let scenario = fs::read_to_string(folder.join("scenario")).unwrap();
-    let scenario = scenario.trim();
+    let scenario = pick_scenario(&scenario, &vdf_text);
+    let scenario = scenario.as_str();
+    let attempted = seen.join("attempted");
+    let mut list = fs::read_to_string(&attempted).unwrap_or_default();
+    list.push_str(&format!("{}\n", published_file_id(&vdf_text)));
+    fs::write(&attempted, list).unwrap();
     if scenario == "hang" {
         std::thread::sleep(Duration::from_secs(60));
         return ExitCode::from(0);
@@ -168,6 +184,29 @@ fn fake_steamcmd(exe: &Path) -> ExitCode {
         _ => {}
     }
     ExitCode::from(code)
+}
+
+/// `scenario` is one scenario name, or lines of `<publishedfileid>=<name>`
+/// that pick one per item.
+fn pick_scenario(scenario: &str, vdf: &str) -> String {
+    let scenario = scenario.trim();
+    if !scenario.contains('=') {
+        return scenario.to_owned();
+    }
+    let id = published_file_id(vdf);
+    scenario
+        .lines()
+        .find_map(|line| line.strip_prefix(&format!("{id}=")))
+        .unwrap_or_else(|| panic!("fake steamcmd: no scenario for item {id}"))
+        .trim()
+        .to_owned()
+}
+
+fn published_file_id(vdf: &str) -> String {
+    vdf.lines()
+        .find_map(|line| line.trim().strip_prefix("\"publishedfileid\""))
+        .map(|value| value.trim().trim_matches('"').to_owned())
+        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------
@@ -401,4 +440,112 @@ fn the_self_update_accepts_exit_7() {
         log.iter()
             .any(|line| line.starts_with("Steam Console Client"))
     );
+}
+
+// ---------------------------------------------------------------------------
+// Several mods
+
+/// Three EU4 mods with items 101, 102 and 103, in a scratch repository.
+fn three_mods() -> (tempfile::TempDir, Plan) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut toml = "schema = 1\n[defaults]\ngame = \"eu4\"\n".to_owned();
+    for (index, id) in ["one", "two", "three"].iter().enumerate() {
+        toml.push_str(&format!("[[mod]]\nid = \"{id}\"\npath = \"{id}\"\n"));
+        let folder = dir.path().join(id);
+        fs::create_dir_all(folder.join("common")).unwrap();
+        fs::write(folder.join("common/notes.txt"), id).unwrap();
+        fs::write(
+            folder.join("descriptor.mod"),
+            format!(
+                "name=\"{id}\"\nversion=\"1.0.{index}\"\nremote_file_id=\"{}\"\n",
+                101 + index
+            ),
+        )
+        .unwrap();
+    }
+    fs::write(dir.path().join("workshop.toml"), toml).unwrap();
+    let config = Config::load(&dir.path().join("workshop.toml")).unwrap();
+    let plan = Plan::build(&config, &[]).unwrap();
+    (dir, plan)
+}
+
+fn publish_all(scenario: &str, fail_fast: bool) -> (Report, Vec<String>) {
+    let (_dir, plan) = three_mods();
+    let steamcmd = fake_install(scenario);
+    let options = PublishOptions::default();
+    let mut log = |_: &str| {};
+    let report = publish::run(&plan, fail_fast, |module| {
+        publish::through_steamcmd(&steamcmd, &credentials(), module, &options, &mut log)
+    });
+    let attempted = seen(&steamcmd, "attempted")
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert!(!steamcmd.session_path().exists(), "the session is deleted");
+    (report, attempted)
+}
+
+fn outcomes(report: &Report) -> Vec<ModOutcome> {
+    report.mods.iter().map(|result| result.outcome).collect()
+}
+
+fn every_mod_is_published() {
+    let (report, attempted) = publish_all("update", false);
+    assert_eq!(attempted, ["101", "102", "103"]);
+    assert_eq!(outcomes(&report), [ModOutcome::Published; 3]);
+    assert_eq!(report.exit_code(), 0);
+}
+
+fn a_failed_mod_does_not_stop_the_others() {
+    let (report, attempted) = publish_all("101=update\n102=no-content\n103=update", false);
+    assert_eq!(attempted, ["101", "102", "103"]);
+    assert_eq!(
+        outcomes(&report),
+        [
+            ModOutcome::Published,
+            ModOutcome::Failed,
+            ModOutcome::Published
+        ]
+    );
+    assert_eq!(report.exit_code(), 1);
+    let two = &report.mods[1];
+    assert_eq!(
+        two.error.as_deref(),
+        Some("steamcmd could not build the Workshop item (exit 9)")
+    );
+    assert!(
+        two.details
+            .iter()
+            .any(|line| line.ends_with("ERROR! Build for workshop item has no content")),
+        "{:?}",
+        two.details
+    );
+}
+
+fn fail_fast_stops_at_the_first_failure() {
+    let (report, attempted) = publish_all("101=update\n102=no-content\n103=update", true);
+    assert_eq!(attempted, ["101", "102"]);
+    assert_eq!(
+        outcomes(&report),
+        [
+            ModOutcome::Published,
+            ModOutcome::Failed,
+            ModOutcome::Skipped
+        ]
+    );
+    assert_eq!(report.exit_code(), 1);
+
+    // A rejected session stops the run even without --fail-fast.
+    let (report, attempted) = publish_all("101=update\n102=no-session\n103=update", false);
+    assert_eq!(attempted, ["101", "102"]);
+    assert_eq!(
+        outcomes(&report),
+        [
+            ModOutcome::Published,
+            ModOutcome::Failed,
+            ModOutcome::Skipped
+        ]
+    );
+    assert_eq!(report.exit_code(), 3);
 }
