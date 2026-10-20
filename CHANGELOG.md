@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.0...v0.1.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* report unchanged when Steam keeps the item's current version ([#40](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/40)) ([87c41cc](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/87c41cc472bbb181ea6086ab207a0ecc71710ed5)), closes [#39](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/39)
+
 ## 0.1.0 (2026-10-20)
 
 
