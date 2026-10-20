@@ -1,10 +1,10 @@
 {
-  "label": "run3-update-ubuntu-windows-session",
+  "label": "run4-tags-key-and-failures-ubuntu",
   "os": "ubuntu-latest",
   "publishedfileid": "3823257732",
-  "revision": 3,
+  "revision": 4,
   "keys": [],
-  "extra_vdf": {},
-  "change_note": "E4 run 3: update from ubuntu-latest with a session made on Windows",
-  "fail_tests": false
+  "extra_vdf": {"tags": "Utilities"},
+  "change_note": "E4 run 4: undocumented tags key, then deliberate failures",
+  "fail_tests": true
 }
