@@ -1,0 +1,17 @@
+schema = 1
+
+[defaults]
+game = "eu4"
+exclude = ["docs/**"]
+checksum = "keep"
+
+[[mod]]
+id = "alpha"
+path = "mods/alpha"
+
+[[mod]]
+id = "beta"
+game = "hoi4"
+path = "mods/beta"
+exclude = ["*.psd"]
+checksum = "ignore"

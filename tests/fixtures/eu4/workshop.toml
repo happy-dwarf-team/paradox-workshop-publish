@@ -1,0 +1,8 @@
+schema = 1
+
+[[mod]]
+game = "eu4"
+visibility = "public"
+exclude = ["docs/**"]
+description = "workshop/description.md"
+changelog = "CHANGELOG.md"

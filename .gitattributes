@@ -1,0 +1,2 @@
+# Keep the fixtures byte for byte: BOMs and line endings are part of the tests.
+tests/fixtures/** -text

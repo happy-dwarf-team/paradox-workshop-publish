@@ -7,10 +7,7 @@
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-
-/// Exit code for a configuration or validation error before any upload
-/// (spec section 3). Unimplemented commands use it too.
-const EXIT_CONFIG: u8 = 2;
+use pdx_ws::exit;
 
 #[derive(Debug, Parser)]
 #[command(name = "pdx-ws", version, about)]
@@ -52,7 +49,8 @@ impl Command {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     eprintln!("pdx-ws {}: not implemented yet", cli.command.name());
-    ExitCode::from(EXIT_CONFIG)
+    // Unimplemented commands use the configuration/validation exit code.
+    ExitCode::from(exit::VALIDATION)
 }
 
 #[cfg(test)]
