@@ -27,3 +27,7 @@ _Avoid_: manifest, job, build
 **Mode**:
 How a publish plan reaches Steam: `steamcmd` (a cached steamcmd session, for hosted CI runners) or `client` (the logged-in Steam client, for a modder's computer or a self-hosted runner). Modes are named by mechanism, never by where they run.
 _Avoid_: CI mode, local mode, backend
+
+**Published copy**:
+The temporary copy of a mod that is actually sent to Steam: excluded files left out, and the descriptor cleaned of local-only keys and given the Workshop item's ID. The mod in the repository is never published directly.
+_Avoid_: staging folder, build output
