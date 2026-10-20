@@ -1,0 +1,10 @@
+{
+  "label": "run1-create-windows",
+  "os": "windows-latest",
+  "publishedfileid": "0",
+  "revision": 1,
+  "keys": ["title", "description", "previewfile", "visibility"],
+  "extra_vdf": {},
+  "change_note": "E4 run 1: create from a GitHub-hosted runner",
+  "fail_tests": false
+}
