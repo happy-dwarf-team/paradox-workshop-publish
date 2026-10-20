@@ -8,7 +8,7 @@ Publish Paradox Interactive game mods to the Steam Workshop from GitHub Actions 
 
 Supported games: Europa Universalis IV, Hearts of Iron IV, Stellaris, Imperator: Rome, Crusader Kings III, Victoria 3 and Europa Universalis V.
 
-> **Status: pre-release (0.x).** There are no release binaries yet, and the GitHub Action cannot download `pdx-ws` until they exist. Both are coming in 0.1.0, together with `client` mode and `pdx-ws init`. Until then you can build `pdx-ws` from source (see [Development](#development)) to try `plan`, `publish` in `steamcmd` mode and `session export`.
+> **Status: pre-release (0.x).** There are no release binaries yet, and the GitHub Action cannot download `pdx-ws` until they exist. Both are coming in 0.1.0, and so are the release archives that ship the `steam_api` library for `client` mode and `pdx-ws init`. Until then you can build `pdx-ws` from source (see [Development](#development)) to try `plan`, `publish` in `steamcmd` mode and `session export`.
 
 ## Two modes
 
@@ -89,7 +89,7 @@ cd paradox-workshop-publish
 cargo build --release --locked
 ```
 
-The binary is `target/release/pdx-ws` (`pdx-ws.exe` on Windows). CI runs the same checks on Linux and Windows:
+The binary is `target/release/pdx-ws` (`pdx-ws.exe` on Windows). `client` mode and `pdx-ws init` also need the Steamworks `steam_api` library next to the binary (`steam_api64.dll` on Windows, `libsteam_api.so` on Linux; the other commands run without it on Windows). The build copies it into `target/release/build/steamworks-sys-*/out/`. CI runs the same checks on Linux and Windows:
 
 ```sh
 cargo fmt --all -- --check
