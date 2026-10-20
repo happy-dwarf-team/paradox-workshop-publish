@@ -96,13 +96,39 @@ impl Report {
     }
 }
 
+/// What [`run`] needs from a mode's error.
+pub trait PublishError: fmt::Display {
+    /// The exit code the failure stands for.
+    fn exit_code(&self) -> u8;
+    /// Lines that explain the failure.
+    fn details(&self) -> &[String] {
+        &[]
+    }
+}
+
+impl PublishError for steamcmd::Error {
+    fn exit_code(&self) -> u8 {
+        steamcmd::Error::exit_code(self)
+    }
+
+    fn details(&self) -> &[String] {
+        steamcmd::Error::details(self)
+    }
+}
+
+impl PublishError for crate::client::Error {
+    fn exit_code(&self) -> u8 {
+        crate::client::Error::exit_code(self)
+    }
+}
+
 /// Publishes the plan's mods in order with `publish`. After a failure the
 /// remaining mods are still published, unless `fail_fast` is set or Steam
 /// rejected the session, which no later mod could get past.
-pub fn run(
+pub fn run<E: PublishError>(
     plan: &Plan,
     fail_fast: bool,
-    mut publish: impl FnMut(&ModPlan) -> Result<Published, steamcmd::Error>,
+    mut publish: impl FnMut(&ModPlan) -> Result<Published, E>,
 ) -> Report {
     let mut mods = Vec::with_capacity(plan.mods.len());
     let mut stop: Option<String> = None;
@@ -374,7 +400,7 @@ mod tests {
         let config = Config::load(&dir.path().join("workshop.toml")).unwrap();
         let plan = Plan::build(&config, &[]).unwrap();
         let report = run(&plan, false, |_| {
-            Ok(Published {
+            Ok::<_, steamcmd::Error>(Published {
                 item_id: ItemId::try_from(555).unwrap(),
                 created: true,
             })

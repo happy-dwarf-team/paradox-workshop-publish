@@ -11,12 +11,18 @@ fn pdx_ws(args: &[&str]) -> Output {
 }
 
 #[test]
-fn unimplemented_commands_exit_with_code_2() {
-    let output = pdx_ws(&["init"]);
-    assert_eq!(output.status.code(), Some(2));
-    assert!(output.stdout.is_empty(), "pdx-ws init wrote to stdout");
+fn init_skips_mods_that_have_an_item() {
+    // Every selected mod has an item, so init stops before connecting to
+    // Steam. Tests never reach a real Steam client.
+    let config = fixture_config("eu4");
+    let output = pdx_ws(&["init", "--config", &config]);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(stderr.trim_end(), "pdx-ws init: not implemented yet");
+    assert!(
+        stderr.contains("already has Workshop item 2948217283; nothing to create"),
+        "{stderr}"
+    );
 }
 
 fn fixture_config(name: &str) -> String {
@@ -219,10 +225,29 @@ fn plan_shows_every_selected_mod() {
 }
 
 #[test]
-fn client_mode_is_not_implemented_yet() {
-    let config = fixture_config("eu4");
+fn client_mode_checks_the_items_before_connecting() {
+    // Both stop before connecting to Steam.
+    let config = fixture_config("eu4-unpublished");
     let output = pdx_ws(&["publish", "--config", &config, "--mode", "client"]);
     assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("create it with `pdx-ws init`"), "{stderr}");
+
+    let config = fixture_config("eu4");
+    let output = pdx_ws(&[
+        "publish",
+        "--config",
+        &config,
+        "--mode",
+        "client",
+        "--allow-create",
+    ]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--allow-create is for steamcmd mode"),
+        "{stderr}"
+    );
 }
 
 #[test]

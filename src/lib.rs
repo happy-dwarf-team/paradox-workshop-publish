@@ -7,6 +7,7 @@
 pub mod bbcode;
 pub mod change_note;
 pub mod checksum;
+pub mod client;
 pub mod config;
 pub mod copy;
 pub mod description;
@@ -20,6 +21,7 @@ pub mod mods;
 pub mod plan;
 pub mod publish;
 pub mod steamcmd;
+pub mod write_back;
 
 pub use error::Error;
 

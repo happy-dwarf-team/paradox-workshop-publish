@@ -1,9 +1,8 @@
 //! `pdx-ws`: publish Paradox Interactive game mods to the Steam Workshop.
 //!
-//! `plan`, `publish --mode steamcmd` and `session export` are implemented,
-//! plus the hidden `github-report` that the GitHub Action runs; the other
-//! commands are declared and exit with code 2 until their step of the
-//! implementation sequence in `docs/spec/v1.md` (section 14) implements them.
+//! Commands: `plan`, `publish` in `steamcmd` or `client` mode, `init`,
+//! `session export`, and the hidden `github-report` that the GitHub Action
+//! runs (`docs/spec/v1.md`, section 3).
 
 use std::fmt;
 use std::fs;
@@ -13,6 +12,8 @@ use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use pdx_ws::change_note::ChangeNoteInput;
+use pdx_ws::client::steam::SteamClient;
+use pdx_ws::client::{self, drift};
 use pdx_ws::config::{self, Config};
 use pdx_ws::exit;
 use pdx_ws::github;
@@ -36,7 +37,7 @@ enum Command {
     /// Execute the publish plan in the chosen mode.
     Publish(PublishArgs),
     /// Create the Workshop item in `client` mode and write its ID back.
-    Init,
+    Init(InitArgs),
     /// Manage the Steam session used by `steamcmd` mode.
     #[command(subcommand)]
     Session(SessionCommand),
@@ -71,6 +72,16 @@ struct GithubReportArgs {
     /// Also write the summary to this file.
     #[arg(long, value_name = "PATH")]
     summary_copy: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+struct InitArgs {
+    #[command(flatten)]
+    selection: Selection,
+    /// The change note, in Markdown. Default: the changelog section for the
+    /// descriptor's version, else `Version <version>`.
+    #[arg(long, value_name = "TEXT")]
+    change_note: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -144,18 +155,6 @@ struct ExportArgs {
     stdout: bool,
 }
 
-impl Command {
-    fn name(&self) -> &'static str {
-        match self {
-            Command::Plan(_) => "plan",
-            Command::Publish(_) => "publish",
-            Command::Init => "init",
-            Command::Session(SessionCommand::Export(_)) => "session export",
-            Command::GithubReport(_) => "github-report",
-        }
-    }
-}
-
 /// A failed command: what to print and the exit code.
 struct Failure {
     label: Option<String>,
@@ -197,6 +196,15 @@ impl Failure {
             code: error.exit_code(),
         }
     }
+
+    fn client(label: Option<String>, error: &client::Error) -> Self {
+        Failure {
+            label,
+            message: error.to_string(),
+            details: Vec::new(),
+            code: error.exit_code(),
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -204,13 +212,9 @@ fn main() -> ExitCode {
     let result = match &cli.command {
         Command::Plan(args) => plan(args),
         Command::Publish(args) => publish(args),
+        Command::Init(args) => init(args),
         Command::Session(SessionCommand::Export(args)) => session_export(args),
         Command::GithubReport(args) => github_report(args),
-        command => {
-            eprintln!("pdx-ws {}: not implemented yet", command.name());
-            // Unimplemented commands use the configuration/validation exit code.
-            return ExitCode::from(exit::VALIDATION);
-        }
     };
     match result {
         Ok(()) => ExitCode::from(exit::SUCCESS),
@@ -241,17 +245,12 @@ fn plan(args: &PlanArgs) -> Result<(), Failure> {
 /// per mod. A failed mod does not stop the others unless `--fail-fast` is
 /// given; problems found before any upload stop the whole run.
 fn publish(args: &PublishArgs) -> Result<(), Failure> {
-    if args.mode == Mode::Client {
-        return Err(Failure {
-            label: None,
-            message: "client mode is not implemented yet".to_owned(),
-            details: Vec::new(),
-            code: exit::VALIDATION,
-        });
-    }
     let config = Config::load(&args.selection.config)?;
     let change_note = ChangeNoteInput::from_env(args.change_note.clone());
     let plan = Plan::build_with(&config, &args.selection.mods, &change_note)?;
+    if args.mode == Mode::Client {
+        return publish_client(args, &plan);
+    }
 
     // Everything that can be checked before installing anything.
     for module in &plan.mods {
@@ -282,11 +281,115 @@ fn publish(args: &PublishArgs) -> Result<(), Failure> {
         }
         result
     });
+    finish(&report, args.json)
+}
 
+/// `publish --mode client`: every selected mod must have an item already
+/// (`pdx-ws init` creates them), and all must be of one game.
+fn publish_client(args: &PublishArgs, plan: &Plan) -> Result<(), Failure> {
+    if args.allow_create {
+        return Err(Failure {
+            label: None,
+            message: "--allow-create is for steamcmd mode; client mode creates items with \
+                      `pdx-ws init`"
+                .to_owned(),
+            details: Vec::new(),
+            code: exit::VALIDATION,
+        });
+    }
+    for module in &plan.mods {
+        if module.item.id.is_none() {
+            return Err(Failure::client(
+                Some(module.label()),
+                &client::Error::NoItemId,
+            ));
+        }
+        for warning in &module.warnings {
+            eprintln!("warning: {}: {}", module.label(), warning.message);
+        }
+    }
+    let mut steam = connect(plan)?;
+    let report = publish::run(plan, args.fail_fast, |module| {
+        eprintln!("Publishing {}", module.label());
+        let result = client::publish(&mut steam, module, &mut |event| {
+            eprintln!("steam | {event}");
+        });
+        if let Err(error) = &result {
+            eprintln!("{}", Failure::client(Some(module.label()), error));
+        }
+        result
+    });
+    finish(&report, args.json)
+}
+
+/// `pdx-ws init`: creates the Workshop item of every selected mod that has
+/// none yet, in `client` mode, and writes each ID back for the modder to
+/// commit.
+fn init(args: &InitArgs) -> Result<(), Failure> {
+    let config = Config::load(&args.selection.config)?;
+    let change_note = ChangeNoteInput::from_env(args.change_note.clone());
+    let mut plan = Plan::build_with(&config, &args.selection.mods, &change_note)?;
+    plan.mods.retain(|module| match module.item.id {
+        Some(item_id) => {
+            eprintln!(
+                "{}: already has Workshop item {item_id}; nothing to create",
+                module.label()
+            );
+            false
+        }
+        None => true,
+    });
+    if plan.mods.is_empty() {
+        return Ok(());
+    }
+    for module in &plan.mods {
+        for warning in &module.warnings {
+            eprintln!("warning: {}: {}", module.label(), warning.message);
+        }
+    }
+    let mut steam = connect(&plan)?;
+    for module in &plan.mods {
+        let label = module.label();
+        eprintln!("Creating the Workshop item of {label}");
+        let created = client::init(&mut steam, &config, module, &change_note, &mut |event| {
+            eprintln!("steam | {event}");
+        })
+        .map_err(|error| Failure::client(Some(label.clone()), &error))?;
+        println!(
+            "{label}: created Workshop item {} ({}); commit {}",
+            created.item_id,
+            created.item_id.url(),
+            created.write_back
+        );
+    }
+    Ok(())
+}
+
+/// Connects to Steam as the selected mods' game and reports checksum drift.
+fn connect(plan: &Plan) -> Result<SteamClient, Failure> {
+    let game = client::single_game(plan)
+        .map_err(|error| Failure::client(None, &error))?
+        .ok_or_else(|| Failure {
+            label: None,
+            message: "no mod is selected".to_owned(),
+            details: Vec::new(),
+            code: exit::VALIDATION,
+        })?;
+    let steam = SteamClient::connect(game).map_err(|error| Failure::client(None, &error))?;
+    for module in &plan.mods {
+        for warning in drift::cross_check(&steam, module) {
+            eprintln!("warning: {}: {warning}", module.label());
+        }
+    }
+    Ok(steam)
+}
+
+/// Prints the per-mod results and turns them into the exit code.
+fn finish(report: &publish::Report, json: bool) -> Result<(), Failure> {
     let mut stdout = io::stdout().lock();
     // A closed stdout (e.g. `| head`) does not change the exit code.
-    let _ = if args.json {
-        serde_json::to_writer_pretty(&mut stdout, &report)
+    let _ = if json {
+        serde_json::to_writer_pretty(&mut stdout, report)
             .map_err(io::Error::from)
             .and_then(|()| writeln!(stdout))
     } else {

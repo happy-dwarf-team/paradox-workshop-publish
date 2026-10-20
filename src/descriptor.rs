@@ -205,15 +205,7 @@ impl DescriptorMod {
         if let Some(id) = item_id
             && self.remote_file_id != Some(id)
         {
-            let newline = if self.text.contains("\r\n") {
-                "\r\n"
-            } else {
-                "\n"
-            };
-            if !text.is_empty() && !text.ends_with('\n') {
-                text.push_str(newline);
-            }
-            text.push_str(&format!("remote_file_id=\"{id}\"{newline}"));
+            text = append_remote_file_id(&text, id);
             added.push("remote_file_id".to_owned());
         }
         PublishedDescriptor {
@@ -222,6 +214,19 @@ impl DescriptorMod {
             added,
         }
     }
+}
+
+/// `text` with a `remote_file_id="<id>"` line at the end, in the file's own
+/// line ending, as the launcher writes it.
+pub fn append_remote_file_id(text: &str, id: ItemId) -> String {
+    let newline = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = String::with_capacity(text.len() + 40);
+    out.push_str(text);
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push_str(newline);
+    }
+    out.push_str(&format!("remote_file_id=\"{id}\"{newline}"));
+    out
 }
 
 /// The range to cut for an entry: its whole line when nothing else is on

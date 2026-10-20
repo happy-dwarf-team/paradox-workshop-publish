@@ -42,6 +42,36 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
+      # pdx-ws outside cargo, which otherwise puts steam_api on the library
+      # path (build.rs). On Windows steam_api64.dll is delay-loaded: without
+      # it everything but client mode works, and client mode says what is
+      # missing before calling Steam. On Linux libsteam_api.so is found next
+      # to the binary through its $ORIGIN rpath.
+      - name: Start without cargo's library path
+        shell: bash
+        run: |
+          set -euo pipefail
+          bare="$RUNNER_TEMP/bare"
+          mkdir -p "$bare"
+          config="$PWD/tests/fixtures/eu4/workshop.toml"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/debug/pdx-ws.exe "$bare/"
+            "$bare/pdx-ws.exe" --version
+            "$bare/pdx-ws.exe" plan --config "$config" > /dev/null
+            set +e
+            "$bare/pdx-ws.exe" publish --mode client --config "$config" 2> "$bare/stderr.txt"
+            code=$?
+            set -e
+            cat "$bare/stderr.txt"
+            test "$code" = 2
+            grep -q "client mode needs steam_api64.dll" "$bare/stderr.txt"
+          else
+            cp target/debug/pdx-ws "$bare/"
+            cp "$(find target/debug/build -name libsteam_api.so | head -n 1)" "$bare/"
+            env -u LD_LIBRARY_PATH "$bare/pdx-ws" --version
+            env -u LD_LIBRARY_PATH "$bare/pdx-ws" plan --config "$config" > /dev/null
+          fi
+
   # The cargo-dist config stays valid while publishing is off (spec section 14, step 11).
   dist:
     runs-on: ubuntu-latest
