@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use pdx_ws::Error;
+use pdx_ws::change_note::{ChangeNoteInput, ChangeNoteSource};
 use pdx_ws::config::Config;
 use pdx_ws::copy::PublishedCopy;
 use pdx_ws::plan::{ChecksumReport, ModPlan, Plan, PlanError, WriteBack};
@@ -72,7 +73,81 @@ fn eu4_plan_lists_the_published_copy() {
     assert_eq!((preview.path.as_str(), preview.size), ("thumbnail.png", 69));
     assert!(plan.write_backs.is_empty());
     assert!(matches!(plan.checksum, ChecksumReport::Changes { .. }));
-    assert_eq!(codes(&plan), ["not-implemented", "checksum"]);
+    assert_eq!(codes(&plan), ["checksum"]);
+}
+
+#[test]
+fn eu4_plan_renders_the_description_and_change_note() {
+    let plan = plan_one("eu4");
+    let metadata = &plan.metadata;
+    assert_eq!(
+        metadata.description.as_deref(),
+        Some(
+            "[h1]Fixture Mod[/h1]\n\nAdds [b]missions[/b] for the [i]Baltic[/i] states.\n\n\
+             [list]\n[*]Works with [url=https://store.steampowered.com/app/236850]EU4 1.37[/url]\n\
+             [*]No [strike]achievements[/strike] checksum changes\n[/list]"
+        )
+    );
+    assert_eq!(
+        metadata.description_source.as_deref(),
+        Some("docs/description.md")
+    );
+    assert_eq!(
+        metadata.change_note.as_deref(),
+        Some(
+            "[h3]Bug Fixes[/h3]\n\n[list]\n[*][b]missions:[/b] fix the Riga trigger \
+             ([url=https://github.com/happy-dwarf-team/fixture-mod/commit/abc1234]abc1234[/url])\n\
+             [/list]"
+        )
+    );
+    assert_eq!(
+        metadata.change_note_source,
+        Some(ChangeNoteSource::Changelog {
+            file: "docs/CHANGELOG.md".to_owned(),
+            version: "1.4.2".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn without_sources_the_description_is_untouched_and_the_note_is_the_version() {
+    let dir = fixture("multi");
+    let config = Config::load(&dir.join("workshop.toml")).unwrap();
+    let input = ChangeNoteInput {
+        explicit: None,
+        commit_url: Some("https://github.com/o/r/commit/abc".to_owned()),
+    };
+    let plan = Plan::build_with(&config, &[], &input).unwrap();
+    let alpha = &plan.mods[0].metadata;
+    assert_eq!(alpha.description, None);
+    assert_eq!(alpha.description_source, None);
+    assert_eq!(
+        alpha.change_note.as_deref(),
+        Some(
+            "Version 1.0.0\n\n[url=https://github.com/o/r/commit/abc]\
+             https://github.com/o/r/commit/abc[/url]"
+        )
+    );
+    assert_eq!(alpha.change_note_source, Some(ChangeNoteSource::Fallback));
+}
+
+#[test]
+fn the_change_note_option_wins_over_the_changelog() {
+    let config = Config::load(&fixture("eu4").join("workshop.toml")).unwrap();
+    let input = ChangeNoteInput {
+        explicit: Some("Hotfix for *Riga*".to_owned()),
+        commit_url: None,
+    };
+    let plan = Plan::build_with(&config, &[], &input).unwrap();
+    let metadata = &plan.mods[0].metadata;
+    assert_eq!(
+        metadata.change_note.as_deref(),
+        Some("Hotfix for [i]Riga[/i]")
+    );
+    assert_eq!(
+        metadata.change_note_source,
+        Some(ChangeNoteSource::Explicit)
+    );
 }
 
 #[test]
@@ -211,6 +286,44 @@ fn invalid_globs_are_validation_errors() {
         error.to_string().contains("`gfx/[` is not a valid glob"),
         "{error}"
     );
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn description_and_changelog_errors_are_validation_errors() {
+    let dir = scratch(
+        "schema = 1\n[[mod]]\ngame = \"eu4\"\ndescription = \"about.md\"\n",
+        &[
+            ("descriptor.mod", b"name=\"A\"\nversion=\"1.0.0\"\n"),
+            ("about.md", b"# A\n\n![shot](gfx/shot.png)\n"),
+        ],
+    );
+    let error = plan_dir(dir.path(), &[]).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "the mod at `.`: about.md, line 3: the image `gfx/shot.png` needs an absolute \
+         http(s) URL; Steam cannot show repository files"
+    );
+    assert_eq!(error.exit_code(), 2);
+
+    fs::write(
+        dir.path().join("workshop.toml"),
+        "schema = 1\n[[mod]]\ngame = \"eu4\"\nchangelog = \"CHANGELOG.md\"\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("CHANGELOG.md"),
+        "## [0.9.0] - 2026-01-01\n\n- old\n",
+    )
+    .unwrap();
+    let error = plan_dir(dir.path(), &[]).unwrap_err();
+    assert!(matches!(
+        &error,
+        Error::Plan {
+            source: PlanError::NoChangelogSection { .. },
+            ..
+        }
+    ));
     assert_eq!(error.exit_code(), 2);
 }
 
