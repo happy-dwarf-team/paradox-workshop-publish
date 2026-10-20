@@ -5,6 +5,7 @@
 //! Linux, the session, the VDF and the logs. The folder is deleted when the
 //! [`Steamcmd`] is dropped, and the session file right after each run.
 
+pub mod export;
 pub mod install;
 pub mod output;
 pub mod process;
@@ -37,11 +38,29 @@ pub const PUBLISH_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// How many lines of each steamcmd log a failure shows.
 const LOG_TAIL: usize = 15;
 
-/// A steamcmd installation in a temporary folder.
+/// A steamcmd installation: in a temporary folder for publishing, or in a
+/// per-user folder for `pdx-ws session export`.
 #[derive(Debug)]
 pub struct Steamcmd {
-    root: TempDir,
+    root: Root,
     executable: PathBuf,
+}
+
+#[derive(Debug)]
+enum Root {
+    /// Deleted with the [`Steamcmd`].
+    Temporary(TempDir),
+    /// Kept, so the next export does not download steamcmd again.
+    Kept(PathBuf),
+}
+
+impl Root {
+    fn path(&self) -> &Path {
+        match self {
+            Root::Temporary(dir) => dir.path(),
+            Root::Kept(dir) => dir,
+        }
+    }
 }
 
 /// Options of one publish.
@@ -82,9 +101,16 @@ pub enum Error {
     Session(#[from] SessionError),
     #[error(
         "Steam did not accept the Steam session ({reason}): it is missing or expired; create \
-         a new one with `pdx-ws session export`"
+         a new one with `pdx-ws session export --user <name>` and store it in the secret again"
     )]
     SessionRejected { reason: String },
+    /// `pdx-ws session export`: the login without a password failed, so a
+    /// session would not work in CI and nothing is exported.
+    #[error(
+        "the second login without a password did not work ({0}); nothing was exported, so log \
+         in again with `pdx-ws session export`"
+    )]
+    LoginCheck(String),
     #[error(transparent)]
     Install(#[from] InstallError),
     #[error("{action}: {source}")]
@@ -148,7 +174,29 @@ impl Steamcmd {
     /// scratch folder: the session is written into it, and it is deleted
     /// with this value.
     pub fn from_installed(root: TempDir, executable: PathBuf) -> Steamcmd {
-        Steamcmd { root, executable }
+        Steamcmd {
+            root: Root::Temporary(root),
+            executable,
+        }
+    }
+
+    /// Uses the steamcmd in `dir`, downloading it first when it is not there,
+    /// and lets it update itself. `dir` is kept.
+    pub fn install_in(dir: &Path, log: &mut dyn FnMut(&str)) -> Result<Steamcmd, Error> {
+        if !cfg!(any(windows, target_os = "linux")) {
+            return Err(Error::UnsupportedPlatform(std::env::consts::OS));
+        }
+        let folder = dir.join("steamcmd");
+        let executable = folder.join(install::EXECUTABLE);
+        if !executable.is_file() {
+            install::download(&folder)?;
+        }
+        let steamcmd = Steamcmd {
+            root: Root::Kept(dir.to_owned()),
+            executable,
+        };
+        steamcmd.self_update(log)?;
+        Ok(steamcmd)
     }
 
     /// The temporary folder that holds everything.

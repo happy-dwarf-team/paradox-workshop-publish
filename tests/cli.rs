@@ -12,14 +12,11 @@ fn pdx_ws(args: &[&str]) -> Output {
 
 #[test]
 fn unimplemented_commands_exit_with_code_2() {
-    for args in [&["init"][..], &["session", "export"]] {
-        let output = pdx_ws(args);
-        assert_eq!(output.status.code(), Some(2), "pdx-ws {args:?}");
-        assert!(output.stdout.is_empty(), "pdx-ws {args:?} wrote to stdout");
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let expected = format!("pdx-ws {}: not implemented yet", args.join(" "));
-        assert_eq!(stderr.trim_end(), expected, "pdx-ws {args:?}");
-    }
+    let output = pdx_ws(&["init"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty(), "pdx-ws init wrote to stdout");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(stderr.trim_end(), "pdx-ws init: not implemented yet");
 }
 
 fn fixture_config(name: &str) -> String {
@@ -177,6 +174,21 @@ fn client_mode_is_not_implemented_yet() {
     let config = fixture_config("eu4");
     let output = pdx_ws(&["publish", "--config", &config, "--mode", "client"]);
     assert_eq!(output.status.code(), Some(2));
+}
+
+#[test]
+fn session_export_needs_a_user_name_without_a_terminal() {
+    // stdout is a pipe here, so the session may go there; without --user and
+    // without a terminal to ask on, it stops before installing steamcmd.
+    let output = Command::new(env!("CARGO_BIN_EXE_pdx-ws"))
+        .args(["session", "export"])
+        .stdin(std::process::Stdio::null())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("--user"), "{stderr}");
 }
 
 #[test]

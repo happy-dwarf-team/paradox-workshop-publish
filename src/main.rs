@@ -5,7 +5,7 @@
 //! sequence in `docs/spec/v1.md` (section 14) implements them.
 
 use std::fmt;
-use std::io::{self, Write};
+use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -15,6 +15,7 @@ use pdx_ws::config::{self, Config};
 use pdx_ws::exit;
 use pdx_ws::plan::Plan;
 use pdx_ws::publish::{self, Outcome};
+use pdx_ws::steamcmd::export;
 use pdx_ws::steamcmd::session::Credentials;
 use pdx_ws::steamcmd::{self, PublishOptions, Steamcmd};
 
@@ -96,7 +97,17 @@ enum Mode {
 #[derive(Debug, Subcommand)]
 enum SessionCommand {
     /// Log in to steamcmd interactively and print the Steam session to stdout.
-    Export,
+    Export(ExportArgs),
+}
+
+#[derive(Debug, Args)]
+struct ExportArgs {
+    /// The Steam user name. Default: asked on the terminal.
+    #[arg(long, value_name = "NAME")]
+    user: Option<String>,
+    /// Write the session even when stdout is a terminal.
+    #[arg(long)]
+    stdout: bool,
 }
 
 impl Command {
@@ -105,7 +116,7 @@ impl Command {
             Command::Plan(_) => "plan",
             Command::Publish(_) => "publish",
             Command::Init => "init",
-            Command::Session(SessionCommand::Export) => "session export",
+            Command::Session(SessionCommand::Export(_)) => "session export",
         }
     }
 }
@@ -158,6 +169,7 @@ fn main() -> ExitCode {
     let result = match &cli.command {
         Command::Plan(args) => plan(args),
         Command::Publish(args) => publish(args),
+        Command::Session(SessionCommand::Export(args)) => session_export(args),
         command => {
             eprintln!("pdx-ws {}: not implemented yet", command.name());
             // Unimplemented commands use the configuration/validation exit code.
@@ -257,6 +269,73 @@ fn publish(args: &PublishArgs) -> Result<(), Failure> {
             code,
         }),
     }
+}
+
+/// `pdx-ws session export`: the session goes to stdout only, everything
+/// else to stderr.
+fn session_export(args: &ExportArgs) -> Result<(), Failure> {
+    let usage = |message: String| Failure {
+        label: None,
+        message,
+        details: Vec::new(),
+        code: exit::VALIDATION,
+    };
+    if !export::may_write_session(io::stdout().is_terminal(), args.stdout) {
+        let user = args.user.as_deref().unwrap_or("<name>");
+        return Err(usage(format!(
+            "stdout is a terminal, so the Steam session would be shown on screen; pipe it into \
+             a secret instead, or pass --stdout\n\n{}",
+            export::guidance(user)
+        )));
+    }
+    let user = match &args.user {
+        Some(user) => user.trim().to_owned(),
+        None if io::stdin().is_terminal() => {
+            eprint!("Steam user name: ");
+            let mut line = String::new();
+            io::stdin()
+                .lock()
+                .read_line(&mut line)
+                .map_err(|error| usage(format!("cannot read the user name: {error}")))?;
+            line.trim().to_owned()
+        }
+        None => String::new(),
+    };
+    if user.is_empty() {
+        return Err(usage("pass the Steam user name with --user".to_owned()));
+    }
+    let dir = export::data_dir().ok_or_else(|| {
+        usage(
+            "cannot find the per-user data folder (LOCALAPPDATA, XDG_DATA_HOME or HOME)".to_owned(),
+        )
+    })?;
+
+    eprintln!(
+        "pdx-ws keeps steamcmd in {}. Log in as {user} with your password and Steam Guard code \
+         when steamcmd asks.",
+        dir.display()
+    );
+    let mut log = |line: &str| eprintln!("steamcmd | {line}");
+    let steamcmd =
+        Steamcmd::install_in(&dir, &mut log).map_err(|error| Failure::steamcmd(None, &error))?;
+    let session = steamcmd
+        .export_session(&user, &mut log)
+        .map_err(|error| Failure::steamcmd(None, &error))?;
+
+    let mut stdout = io::stdout().lock();
+    writeln!(stdout, "{session}")
+        .and_then(|()| stdout.flush())
+        .map_err(|error| Failure {
+            label: None,
+            message: format!("cannot write the Steam session to stdout: {error}"),
+            details: Vec::new(),
+            code: exit::PUBLISH_FAILED,
+        })?;
+    eprintln!(
+        "\nThe Steam session for {user} went to stdout; the local copy is deleted.\n\n{}",
+        export::guidance(&user)
+    );
+    Ok(())
 }
 
 #[cfg(test)]

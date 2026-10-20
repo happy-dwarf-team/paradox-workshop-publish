@@ -69,6 +69,11 @@ fn main() -> ExitCode {
             "fail_fast_stops_at_the_first_failure",
             fail_fast_stops_at_the_first_failure,
         ),
+        ("exports_a_checked_session", exports_a_checked_session),
+        (
+            "a_session_that_fails_the_check_is_not_exported",
+            a_session_that_fails_the_check_is_not_exported,
+        ),
     ])
 }
 
@@ -121,6 +126,10 @@ fn fake_steamcmd(exe: &Path) -> ExitCode {
         // The first self-update on Windows exits with 7.
         println!("Steam Console Client (c) Valve Corporation - version 1791918946");
         return ExitCode::from(7);
+    }
+    if let [login, user, quit] = &args[..] {
+        assert_eq!((login.as_str(), quit.as_str()), ("+login", "+quit"));
+        return fake_login(folder, user);
     }
     let [login, user, build, vdf, quit] = &args[..] else {
         eprintln!("fake steamcmd: unexpected arguments {args:?}");
@@ -207,6 +216,30 @@ fn published_file_id(vdf: &str) -> String {
         .find_map(|line| line.trim().strip_prefix("\"publishedfileid\""))
         .map(|value| value.trim().trim_matches('"').to_owned())
         .unwrap_or_default()
+}
+
+/// `+login <user> +quit`: without a cached login it stands in for the
+/// interactive login and caches one; with it, it logs in from the cache
+/// (or, in the `no-session` scenario, rejects it as E4 recorded).
+fn fake_login(folder: &Path, user: &str) -> ExitCode {
+    let session = fake_session_path(folder);
+    let scenario = fs::read_to_string(folder.join("scenario")).unwrap();
+    if !session.exists() {
+        println!("Logging in user '{user}' [U:1:12345678] to Steam Public...OK");
+        fs::create_dir_all(session.parent().unwrap()).unwrap();
+        fs::write(&session, SESSION).unwrap();
+        return ExitCode::SUCCESS;
+    }
+    if scenario.trim() == "no-session" {
+        let transcript = fs::read_to_string(fixtures().join("no-session.txt")).unwrap();
+        let (_, body) = transcript.split_once('\n').unwrap();
+        print!("{}", body.replace("{user}", user).replace("^[", "\u{1b}"));
+        return ExitCode::from(5);
+    }
+    println!("Logging in using cached credentials.");
+    println!("Logging in user '{user}' [U:1:12345678] to Steam Public...OK");
+    println!("Waiting for user info...OK");
+    ExitCode::SUCCESS
 }
 
 // ---------------------------------------------------------------------------
@@ -548,4 +581,43 @@ fn fail_fast_stops_at_the_first_failure() {
         ]
     );
     assert_eq!(report.exit_code(), 3);
+}
+
+fn exports_a_checked_session() {
+    let steamcmd = fake_install("export");
+    // A stale cached login is deleted first, so the login is a fresh one.
+    let stale = steamcmd.session_path();
+    fs::create_dir_all(stale.parent().unwrap()).unwrap();
+    fs::write(&stale, b"stale").unwrap();
+
+    let mut log = Vec::new();
+    let encoded = steamcmd
+        .export_session(USER, &mut |line| log.push(line.to_owned()))
+        .unwrap();
+    let decoded = Credentials::new(USER, &encoded).unwrap();
+    assert_eq!(decoded.session(), SESSION);
+    assert!(
+        !steamcmd.session_path().exists(),
+        "the local copy is deleted"
+    );
+    // The check login is masked like any other run.
+    assert_masked(&log);
+    assert!(
+        log.iter()
+            .any(|line| line.contains("Logging in using cached credentials"))
+    );
+}
+
+fn a_session_that_fails_the_check_is_not_exported() {
+    let steamcmd = fake_install("no-session");
+    let error = steamcmd.export_session(USER, &mut |_| {}).unwrap_err();
+    assert!(matches!(error, Error::LoginCheck(_)), "{error}");
+    assert!(
+        error.to_string().contains("nothing was exported"),
+        "{error}"
+    );
+    assert!(
+        !steamcmd.session_path().exists(),
+        "the local copy is deleted"
+    );
 }
