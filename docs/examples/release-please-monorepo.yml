@@ -1,0 +1,66 @@
+# Several mods in one repository, versioned by release-please in monorepo
+# mode (release-please-config.json next to this file). Every mod folder is a
+# release-please package whose component is the mod's `id`, so its tags are
+# `<id>-vX.Y.Z`. Copy to .github/workflows/ in the mods' repository.
+#
+# release-please creates the releases with the default GITHUB_TOKEN, which
+# does not start other workflows. So this workflow publishes the released
+# mods itself, right after release-please.
+#
+# Needs a `steam-workshop` environment with the secrets STEAM_SESSION and
+# STEAM_USERNAME that allows deployments from main (docs/guide/setup.md).
+
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      paths_released: ${{ steps.release.outputs.paths_released }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    environment: steam-workshop
+    concurrency:
+      group: steam-workshop
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # paths_released is a JSON list of package folders, e.g.
+      # ["mods/alpha"]; each folder's name is the mod's id.
+      - name: Find the released mods
+        id: released
+        env:
+          PATHS: ${{ needs.release-please.outputs.paths_released }}
+        run: echo "ids=$(jq -r 'map(split("/") | last) | join(" ")' <<< "$PATHS")" >> "$GITHUB_OUTPUT"
+
+      # Coming in 0.1.0: the action needs a pdx-ws release to download.
+      # No change-note input: each mod's change note comes from its own
+      # changelog section for its new version.
+      - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0
+        with:
+          mod: ${{ steps.released.outputs.ids }}
+          steam-username: ${{ secrets.STEAM_USERNAME }}
+          steam-session: ${{ secrets.STEAM_SESSION }}
