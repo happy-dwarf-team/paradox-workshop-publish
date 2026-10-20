@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
+use pdx_ws::change_note::ChangeNoteInput;
 use pdx_ws::config::{self, Config};
 use pdx_ws::exit;
 use pdx_ws::plan::Plan;
@@ -37,6 +38,10 @@ enum Command {
 struct PlanArgs {
     #[command(flatten)]
     selection: Selection,
+    /// The change note, in Markdown. Default: the changelog section for the
+    /// descriptor's version, else `Version <version>`.
+    #[arg(long, value_name = "TEXT")]
+    change_note: Option<String>,
     /// Print the plan as JSON instead of text.
     #[arg(long)]
     json: bool,
@@ -90,7 +95,8 @@ fn main() -> ExitCode {
 
 fn plan(args: &PlanArgs) -> Result<(), pdx_ws::Error> {
     let config = Config::load(&args.selection.config)?;
-    let plan = Plan::build(&config, &args.selection.mods)?;
+    let change_note = ChangeNoteInput::from_env(args.change_note.clone());
+    let plan = Plan::build_with(&config, &args.selection.mods, &change_note)?;
     let mut stdout = io::stdout().lock();
     // A closed stdout (e.g. `| head`) is not a plan error.
     let _ = if args.json {

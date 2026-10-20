@@ -1,5 +1,5 @@
 //! The publish plan: everything one publish will do, computed from the
-//! repository before anything is sent to Steam (spec sections 2, 5, 6 and 8).
+//! repository before anything is sent to Steam (spec sections 2, 5, 6, 7 and 8).
 
 use std::fmt;
 use std::fs;
@@ -9,9 +9,12 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 
 use crate::Error;
+use crate::bbcode::ConvertError;
+use crate::change_note::{self, ChangeNoteInput, ChangeNoteSource, Changelog};
 use crate::checksum;
 use crate::config::{ChecksumSetting, Config, ModConfig, Visibility};
 use crate::copy;
+use crate::description::{self, TEXT_LIMIT};
 use crate::game::{DescriptorFormat, Game};
 use crate::item_id::{ItemId, ItemIdSource};
 use crate::mods::{Descriptor, Mod};
@@ -71,10 +74,14 @@ pub struct WorkshopMetadata {
     pub preview: Option<Preview>,
     /// `None`: the visibility is left as it is.
     pub visibility: Option<Visibility>,
-    /// The description in BBCode; `None` leaves it as it is.
+    /// The description in BBCode, which replaces the Workshop description;
+    /// `None` leaves it as it is.
     pub description: Option<String>,
-    /// The change note in BBCode.
+    /// The `description` file, relative to the folder of `workshop.toml`.
+    pub description_source: Option<String>,
+    /// The change note in BBCode; `None` when nothing gives one.
     pub change_note: Option<String>,
+    pub change_note_source: Option<ChangeNoteSource>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -176,18 +183,54 @@ pub enum PlanError {
     PreviewTooLarge { path: String, size: u64 },
     #[error("`checksum = \"keep\"`, but the published copy changes the {game} checksum: {matches}")]
     ChecksumKept { game: String, matches: String },
+    #[error("cannot read the {what} {path}: {source}")]
+    ReadText {
+        what: &'static str,
+        path: String,
+        source: io::Error,
+    },
+    #[error("the {what} {path} is not valid UTF-8")]
+    TextNotUtf8 { what: &'static str, path: String },
+    #[error("{path}, {source}")]
+    Markdown { path: String, source: ConvertError },
+    #[error("--change-note, {source}")]
+    ChangeNoteOption { source: ConvertError },
+    #[error(
+        "the {what} is {size} bytes after conversion to BBCode; Steam takes at most {TEXT_LIMIT}"
+    )]
+    TextTooLong { what: &'static str, size: usize },
+    #[error("changelog {path} is configured but the descriptor has no `version`")]
+    NoVersion { path: String },
+    #[error(
+        "{path} has no section for version {version}; add a `## [{version}]` heading or pass \
+         --change-note"
+    )]
+    NoChangelogSection { path: String, version: String },
+    #[error("{path}: the section on line {line} is empty")]
+    EmptyChangelogSection { path: String, line: usize },
 }
 
 impl Plan {
     /// Plans the mods named in `selection` (by `id`), or every mod when it
-    /// is empty. Reads the repository; sends nothing.
+    /// is empty, without `--change-note` or a commit link. Reads the
+    /// repository; sends nothing.
     pub fn build(config: &Config, selection: &[String]) -> Result<Plan, Error> {
+        Plan::build_with(config, selection, &ChangeNoteInput::default())
+    }
+
+    /// [`Plan::build`] with the change note's inputs from outside the
+    /// repository.
+    pub fn build_with(
+        config: &Config,
+        selection: &[String],
+        change_note: &ChangeNoteInput,
+    ) -> Result<Plan, Error> {
         let selected = select(config, selection)?;
         let mods = selected
             .into_iter()
             .map(|mod_config| {
                 let module = Mod::load(&config.base_dir, mod_config)?;
-                ModPlan::build(config, &module).map_err(|source| Error::Plan {
+                ModPlan::build(config, &module, change_note).map_err(|source| Error::Plan {
                     label: mod_config.label(),
                     source,
                 })
@@ -231,7 +274,11 @@ fn select<'a>(config: &'a Config, selection: &[String]) -> Result<Vec<&'a ModCon
 }
 
 impl ModPlan {
-    fn build(config: &Config, module: &Mod) -> Result<ModPlan, PlanError> {
+    fn build(
+        config: &Config,
+        module: &Mod,
+        change_note: &ChangeNoteInput,
+    ) -> Result<ModPlan, PlanError> {
         let profile = module.profile;
         let format = profile.descriptor;
         let mut warnings = Vec::new();
@@ -327,15 +374,27 @@ impl ModPlan {
             });
         }
 
-        // Step 4 of the implementation sequence fills this in.
-        if module.config.description.is_some() {
-            warnings.push(Warning {
-                code: "not-implemented",
-                message: "`description` is not converted yet; the Workshop description is \
-                          left as it is"
-                    .to_owned(),
-            });
-        }
+        let description_source = module.config.description.as_deref().map(relative);
+        let description = module
+            .config
+            .description
+            .as_ref()
+            .zip(description_source.as_deref())
+            .map(|(file, path)| description::load(&config.base_dir.join(file), path))
+            .transpose()?;
+        let changelog_file = module
+            .config
+            .changelog
+            .as_ref()
+            .map(|file| config.base_dir.join(file));
+        let changelog_path = module.config.changelog.as_deref().map(relative);
+        let changelog = changelog_file
+            .as_deref()
+            .zip(changelog_path.as_deref())
+            .map(|(file, path)| Changelog { file, path });
+        let change_note =
+            change_note::resolve(change_note, changelog, module.descriptor.version())?;
+
         let checksum = check_checksum(module, &files, &mut warnings)?;
 
         Ok(ModPlan {
@@ -354,8 +413,10 @@ impl ModPlan {
                 tags,
                 preview,
                 visibility: module.config.visibility,
-                description: None,
-                change_note: None,
+                description,
+                description_source,
+                change_note: change_note.as_ref().map(|note| note.bbcode.clone()),
+                change_note_source: change_note.map(|note| note.source),
             },
             files,
             excluded: selection.excluded,
@@ -556,12 +617,31 @@ impl fmt::Display for ModPlan {
             None => writeln!(f, "  Visibility:     unchanged")?,
         }
         match &metadata.description {
-            Some(description) => writeln!(f, "  Description:    {} characters", description.len())?,
+            Some(description) => {
+                writeln!(
+                    f,
+                    "  Description:    replaces the Workshop description ({}, {} of {TEXT_LIMIT} \
+                     bytes)",
+                    metadata.description_source.as_deref().unwrap_or("?"),
+                    description.len()
+                )?;
+                indented(f, description)?;
+            }
             None => writeln!(f, "  Description:    unchanged")?,
         }
-        match &metadata.change_note {
-            Some(note) => writeln!(f, "  Change note:    {note}")?,
-            None => writeln!(f, "  Change note:    none")?,
+        match (&metadata.change_note, &metadata.change_note_source) {
+            (Some(note), source) => {
+                let source = match source {
+                    Some(ChangeNoteSource::Explicit) => "from --change-note".to_owned(),
+                    Some(ChangeNoteSource::Changelog { file, version }) => {
+                        format!("from {file}, version {version}")
+                    }
+                    Some(ChangeNoteSource::Fallback) | None => "default".to_owned(),
+                };
+                writeln!(f, "  Change note:    {source}")?;
+                indented(f, note)?;
+            }
+            (None, _) => writeln!(f, "  Change note:    none (the descriptor has no version)")?,
         }
         let game = checksum::rules(self.game).map_or(profile.name, |rules| rules.name.as_str());
         match &self.checksum {
@@ -642,6 +722,18 @@ fn describe_rules(rules: &RulesUsed) -> String {
         "rules for {}, verified on {}",
         rules.game_version, rules.verified_on
     )
+}
+
+/// BBCode under its plan entry, with a margin that keeps blank lines visible.
+fn indented(f: &mut fmt::Formatter<'_>, text: &str) -> fmt::Result {
+    for line in text.lines() {
+        if line.is_empty() {
+            writeln!(f, "    |")?;
+        } else {
+            writeln!(f, "    | {line}")?;
+        }
+    }
+    Ok(())
 }
 
 fn describe(rewrite: &Rewrite) -> String {

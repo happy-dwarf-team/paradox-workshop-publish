@@ -4,5 +4,5 @@ schema = 1
 game = "eu4"
 visibility = "public"
 exclude = ["docs/**"]
-description = "workshop/description.md"
-changelog = "CHANGELOG.md"
+description = "docs/description.md"
+changelog = "docs/CHANGELOG.md"

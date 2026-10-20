@@ -1,11 +1,14 @@
 //! The library behind the `pdx-ws` CLI: reading `workshop.toml`, the game
-//! profiles and the mod descriptors, and computing the publish plan and the
-//! published copy, and the checksum check (`docs/spec/v1.md`, sections 1 to 6
-//! and 8).
+//! profiles and the mod descriptors, and computing the publish plan, the
+//! published copy, the description, the change note and the checksum check
+//! (`docs/spec/v1.md`, sections 1 to 8).
 
+pub mod bbcode;
+pub mod change_note;
 pub mod checksum;
 pub mod config;
 pub mod copy;
+pub mod description;
 pub mod descriptor;
 pub mod error;
 pub mod game;

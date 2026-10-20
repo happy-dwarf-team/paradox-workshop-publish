@@ -34,6 +34,43 @@ fn plan_prints_text() {
     assert!(stdout.contains("Title:          Fixture Mod"), "{stdout}");
     assert!(stdout.contains("descriptor.mod (without path)"), "{stdout}");
     assert!(stdout.contains("changes the EU4 checksum"), "{stdout}");
+    assert!(
+        stdout.contains(
+            "  Description:    replaces the Workshop description (docs/description.md, \
+             217 of 8000 bytes)\n    | [h1]Fixture Mod[/h1]\n    |\n"
+        ),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains(
+            "  Change note:    from docs/CHANGELOG.md, version 1.4.2\n    | [h3]Bug Fixes[/h3]\n"
+        ),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn plan_takes_the_change_note_option() {
+    let config = fixture_config("eu4");
+    let output = pdx_ws(&[
+        "plan",
+        "--config",
+        &config,
+        "--change-note",
+        "Hotfix for **Riga**",
+        "--json",
+    ]);
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let metadata = &json["mods"][0]["metadata"];
+    assert_eq!(metadata["change_note"], "Hotfix for [b]Riga[/b]");
+    assert_eq!(metadata["change_note_source"]["kind"], "explicit");
+    assert_eq!(metadata["description_source"], "docs/description.md");
+    let description = metadata["description"].as_str().unwrap();
+    assert!(
+        description.starts_with("[h1]Fixture Mod[/h1]"),
+        "{description}"
+    );
 }
 
 #[test]
@@ -48,6 +85,12 @@ fn plan_prints_json() {
     assert_eq!(json["mods"][0]["game"], "hoi4");
     assert_eq!(json["mods"][0]["item"]["id"], serde_json::Value::Null);
     assert_eq!(json["mods"][0]["checksum"]["status"], "ignored");
+    let metadata = &json["mods"][0]["metadata"];
+    assert_eq!(metadata["description"], serde_json::Value::Null);
+    assert_eq!(metadata["change_note_source"]["kind"], "fallback");
+    // In CI the fallback also links the commit.
+    let note = metadata["change_note"].as_str().unwrap();
+    assert!(note.starts_with("Version 2.0.0"), "{note}");
 }
 
 #[test]
