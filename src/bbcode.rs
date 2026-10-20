@@ -4,7 +4,7 @@
 //! Supported: headings 1 to 3, bold, italic, strikethrough, links, lists,
 //! quotes, code, horizontal rules, tables and images with absolute URLs.
 //! Raw HTML, footnotes, relative image paths and deeper headings are errors
-//! that name the line.
+//! that name the line; HTML comments are dropped.
 
 use std::borrow::Cow;
 
@@ -49,14 +49,48 @@ pub fn to_bbcode(markdown: &str) -> Result<String, ConvertError> {
     let options =
         Options::ENABLE_TABLES | Options::ENABLE_STRIKETHROUGH | Options::ENABLE_FOOTNOTES;
     let lines = LineIndex::new(markdown);
+    let error = |offset, problem| ConvertError {
+        line: lines.line(offset),
+        problem,
+    };
     let mut writer = Writer::default();
+    // An HTML block being read: where it starts and its text.
+    let mut html: Option<(usize, String)> = None;
     for (event, range) in Parser::new_ext(markdown, options).into_offset_iter() {
-        writer.event(event).map_err(|problem| ConvertError {
-            line: lines.line(range.start),
-            problem,
-        })?;
+        // HTML comments show nothing, so they are dropped; GitHub's generated
+        // release notes start with one.
+        match (&event, &mut html) {
+            (Event::Start(Tag::HtmlBlock), _) => html = Some((range.start, String::new())),
+            (Event::Html(text), Some((_, block))) => block.push_str(text),
+            (Event::End(TagEnd::HtmlBlock), _) => {
+                if let Some((start, block)) = html.take()
+                    && !only_comments(&block)
+                {
+                    return Err(error(start, Problem::Html));
+                }
+            }
+            (Event::InlineHtml(text), _) if only_comments(text) => {}
+            _ => writer
+                .event(event)
+                .map_err(|problem| error(range.start, problem))?,
+        }
     }
     Ok(writer.finish())
+}
+
+/// HTML that holds nothing but comments and whitespace.
+fn only_comments(html: &str) -> bool {
+    let mut rest = html.trim_start();
+    while !rest.is_empty() {
+        let Some(comment) = rest.strip_prefix("<!--") else {
+            return false;
+        };
+        let Some(end) = comment.find("-->") else {
+            return false;
+        };
+        rest = comment[end + 3..].trim_start();
+    }
+    true
 }
 
 /// Maps byte offsets to 1-based line numbers.
@@ -442,6 +476,17 @@ mod tests {
     }
 
     #[test]
+    fn html_comments_are_dropped() {
+        assert_eq!(
+            convert(
+                "<!-- Release notes generated using configuration in .github/release.yml -->\n\n\
+                 ## What's Changed\n\n<!--\nmulti-line\n-->\nText <!-- inline --> here\n"
+            ),
+            "[h2]What's Changed[/h2]\n\nText  here"
+        );
+    }
+
+    #[test]
     fn errors_name_the_line() {
         assert_eq!(
             error("Text\n\n<div>html</div>\n"),
@@ -452,8 +497,8 @@ mod tests {
             "line 1: raw HTML is not supported; use Markdown only"
         );
         assert_eq!(
-            error("a\nb\n<!-- comment -->\n"),
-            "line 3: raw HTML is not supported; use Markdown only"
+            error("a\n\n<!-- comment -->\n<p>\nhidden\n</p>\n"),
+            "line 4: raw HTML is not supported; use Markdown only"
         );
         assert_eq!(
             error("Note[^1].\n\n[^1]: The note.\n"),
