@@ -31,3 +31,7 @@ _Avoid_: CI mode, local mode, backend
 **Published copy**:
 The temporary copy of a mod that is actually sent to Steam: excluded files left out, and the descriptor cleaned of local-only keys and given the Workshop item's ID. The mod in the repository is never published directly.
 _Avoid_: staging folder, build output
+
+**Steam session**:
+A modder's cached steamcmd login, created once interactively and stored as a CI secret, which lets `steamcmd` mode log in without a password or Steam Guard code.
+_Avoid_: config.vdf, sentry file, token, credentials
