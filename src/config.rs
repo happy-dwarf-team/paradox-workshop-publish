@@ -1,7 +1,7 @@
 //! `workshop.toml`: which mods a repository publishes and how (spec section 4).
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -191,7 +191,11 @@ impl Config {
 fn apply_defaults(defaults: &RawDefaults, raw: RawMod) -> Result<ModConfig, ConfigError> {
     let path = raw.path.unwrap_or_else(|| PathBuf::from("."));
     let label = label(raw.id.as_deref(), &path);
-    if path.has_root() {
+    // A root or a drive (`C:mods` on Windows) would leave the repository.
+    if matches!(
+        path.components().next(),
+        Some(Component::RootDir | Component::Prefix(_))
+    ) {
         return Err(ConfigError::AbsolutePath {
             label,
             path: path.display().to_string(),
@@ -413,13 +417,14 @@ mod tests {
 
     #[test]
     fn paths_and_description_types_are_checked() {
-        let absolute = if cfg!(windows) {
-            "C:/mods/a"
-        } else {
-            "/mods/a"
-        };
-        let text = format!("schema = 1\n[[mod]]\ngame = \"eu4\"\npath = \"{absolute}\"\n");
-        assert!(error(&text).contains("`path` must be relative"));
+        let mut absolute = vec!["/mods/a"];
+        if cfg!(windows) {
+            absolute.extend(["C:/mods/a", "C:mods"]);
+        }
+        for path in absolute {
+            let text = format!("schema = 1\n[[mod]]\ngame = \"eu4\"\npath = \"{path}\"\n");
+            assert!(error(&text).contains("`path` must be relative"), "{path}");
+        }
         let text = "schema = 1\n[[mod]]\ngame = \"eu4\"\ndescription = \"README.txt\"\n";
         assert_eq!(
             error(text),
