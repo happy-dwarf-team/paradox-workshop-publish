@@ -9,6 +9,7 @@ use crate::exit;
 use crate::game::Game;
 use crate::item_id::ItemIdError;
 use crate::metadata::MetadataError;
+use crate::plan::PlanError;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -35,6 +36,10 @@ pub enum Error {
     },
     #[error("{label}: {source}")]
     ItemId { label: String, source: ItemIdError },
+    #[error("{0}")]
+    Selection(PlanError),
+    #[error("{label}: {source}")]
+    Plan { label: String, source: PlanError },
 }
 
 impl Error {
