@@ -41,6 +41,7 @@ The other mods are still published, and the run exits with code 1 at the end. Th
 | Result | Meaning |
 | --- | --- |
 | `published` | The existing item was updated. |
+| `unchanged` | `steamcmd` mode: Steam found no content change and kept the item's current version, so the change note was not recorded (see [the change note](description-and-change-notes.md#when-steam-keeps-the-old-version)). A warning, not a failure: the run still exits 0. |
 | `created` | `--allow-create` made a new item; commit the ID it prints. |
 | `failed` | This mod failed; its error and steamcmd's error lines are shown. |
 | `skipped` | Not attempted, after `--fail-fast` or a rejected session. |

@@ -1,0 +1,11 @@
+[2026-10-20 21:07:04]: Building file listing for depot 236850 ...
+[2026-10-20 21:07:04]: Found 4 files for mapping: /home/runner/work/_temp/pdx-ws.3TiGKp/tmp/pdx-ws-B4TafF * -> .
+[2026-10-20 21:07:04]: Found 4 files (0 MB) for depot 236850
+[2026-10-20 21:07:05]: Building depot 236850, baseline manifest 841415855740195346 (4 files)
+[2026-10-20 21:07:05]: Found 3 new chunks ( 3 used previously ) for depot 236850, took 0 minutes, 0 seconds
+[2026-10-20 21:07:05]: Changes to baseline manifest 841415855740195346 :
+[2026-10-20 21:07:05]: Changed: "e2e\run.txt" 1 KB size, 1 KB changed
+[2026-10-20 21:07:05]: Summary: 0 files added (0 bytes), 1 files changed (87 bytes), 0 files removed (0 bytes)
+[2026-10-20 21:07:05]: Uploading new manifest to depot-ingest.discovery.steamserver.net (handle 17925028596154245139, 742 bytes).
+[2026-10-20 21:07:06]: Uploading 1 out of 1 missing chunks.
+[2026-10-20 21:07:07]: Success! New manifestID 4390425272313943695 created and 1 new chunks uploaded.

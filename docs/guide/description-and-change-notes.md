@@ -59,6 +59,12 @@ Each publish attaches a change note, shown on the item's *Change Notes* page. `p
 
 All three go through the same Markdown converter, with the same errors.
 
+### When Steam keeps the old version
+
+Steam records a change note only with a new version of the content. If the published copy is byte for byte what the item already has (for example a release that changed only files `pdx-ws` leaves out, or a first publish of what the launcher uploaded before), Steam keeps the current version: the item's update date stays and the change note is dropped. steamcmd still prints `Success`.
+
+`pdx-ws` reads this from steamcmd's logs (`No content change detected`) and reports the mod as **`unchanged`** instead of `published`, with a warning; the action adds a warning annotation. The run still succeeds, because nothing went wrong. To publish a new version, change a file of the mod.
+
 ### Release body or changelog?
 
 - **Release body:** if you write release notes on GitHub, pass them with `change-note: ${{ github.event.release.body }}`. GitHub's generated release notes start with an HTML comment, which is dropped.

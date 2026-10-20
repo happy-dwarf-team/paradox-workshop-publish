@@ -37,6 +37,10 @@ fn main() -> ExitCode {
             updates_an_item_and_cleans_up,
         ),
         (
+            "an_update_without_content_change_is_unchanged",
+            an_update_without_content_change_is_unchanged,
+        ),
+        (
             "creates_an_item_only_when_allowed",
             creates_an_item_only_when_allowed,
         ),
@@ -168,7 +172,13 @@ fn fake_steamcmd(exe: &Path) -> ExitCode {
         std::thread::sleep(Duration::from_secs(60));
         return ExitCode::from(0);
     }
-    let transcript = fs::read_to_string(fixtures().join(format!("{scenario}.txt"))).unwrap();
+    // `unchanged` prints what `update` prints; only the logs differ (#39).
+    let printed = if scenario == "unchanged" {
+        "update"
+    } else {
+        scenario
+    };
+    let transcript = fs::read_to_string(fixtures().join(format!("{printed}.txt"))).unwrap();
     let (first, body) = transcript.split_once('\n').unwrap();
     let code: u8 = first.trim().strip_prefix("exit=").unwrap().parse().unwrap();
     print!("{}", body.replace("{user}", user).replace("^[", "\u{1b}"));
@@ -180,6 +190,18 @@ fn fake_steamcmd(exe: &Path) -> ExitCode {
                 &format!("\"publishedfileid\" \"{CREATED_ID}\""),
             );
             fs::write(vdf, updated).unwrap();
+        }
+        "update" | "unchanged" => {
+            let from = fixtures().join(if scenario == "update" {
+                "logs-new"
+            } else {
+                "logs-unchanged"
+            });
+            let logs = folder.join("logs");
+            fs::create_dir_all(&logs).unwrap();
+            for name in ["workshop_log.txt", "depot_build_236850.log"] {
+                fs::copy(from.join(name), logs.join(name)).unwrap();
+            }
         }
         "no-content" => {
             let logs = folder.join("logs");
@@ -331,7 +353,18 @@ fn updates_an_item_and_cleans_up() {
     let published = outcome.result.unwrap();
     assert_eq!(published.item_id.to_string(), "2948217283");
     assert!(!published.created);
+    assert!(!published.unchanged);
     assert_masked(&outcome.log);
+    // steamcmd's logs are shown after a success, masked like its output.
+    assert!(
+        outcome
+            .log
+            .iter()
+            .any(|line| line.starts_with("workshop_log.txt: ")
+                && line.contains("Uploaded new content")),
+        "{:?}",
+        outcome.log
+    );
 
     assert_eq!(seen(&steamcmd, "stdin").as_deref(), Some("closed"));
     assert_eq!(
@@ -620,4 +653,25 @@ fn a_session_that_fails_the_check_is_not_exported() {
         !steamcmd.session_path().exists(),
         "the local copy is deleted"
     );
+}
+
+/// Same stdout as a real update, but Steam reused the previous manifest
+/// (issue #39, E2E run 39497323643).
+fn an_update_without_content_change_is_unchanged() {
+    let steamcmd = fake_install("unchanged");
+    let outcome = publish(&steamcmd, &mod_plan("eu4"), &PublishOptions::default());
+    let published = outcome.result.unwrap();
+    assert_eq!(published.item_id.to_string(), "2948217283");
+    assert!(published.unchanged);
+    assert!(!published.created);
+    assert_masked(&outcome.log);
+    assert!(
+        outcome
+            .log
+            .iter()
+            .any(|line| line.contains("No content change detected")),
+        "{:?}",
+        outcome.log
+    );
+    assert!(!steamcmd.session_path().exists());
 }

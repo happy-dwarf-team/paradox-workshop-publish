@@ -86,6 +86,9 @@ pub struct Published {
     pub item_id: ItemId,
     /// The item was created by this publish (`--allow-create`).
     pub created: bool,
+    /// Steam found no content change and kept the item's current version,
+    /// so the change note was not recorded (issue #39).
+    pub unchanged: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -331,9 +334,12 @@ impl Steamcmd {
             Signal::Success { .. } => {
                 // steamcmd prints the same lines whether or not Steam made a
                 // new version (issue #39); its logs say which.
-                for line in self.log_lines(plan.app_id, user) {
-                    log(&line);
+                let logs = self.log_lines(plan.app_id, user);
+                for line in &logs {
+                    log(line);
                 }
+                let unchanged =
+                    output::content_change(&logs.join("\n")) == output::ContentChange::Unchanged;
                 let written = fs::read_to_string(&vdf_path)
                     .ok()
                     .and_then(|vdf| vdf::published_file_id(&vdf))
@@ -349,6 +355,7 @@ impl Steamcmd {
                     (Some(item_id), _) => Ok(Published {
                         item_id,
                         created: item.is_none(),
+                        unchanged,
                     }),
                     (None, _) => Err(self.failure(
                         run.code,

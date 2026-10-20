@@ -90,6 +90,16 @@ pub struct ResultsView {
     pub mods: Vec<ResultView>,
 }
 
+impl ResultView {
+    /// How messages name the mod.
+    fn label(&self) -> String {
+        match &self.id {
+            Some(id) => format!("mod `{id}`"),
+            None => format!("the mod at `{}`", self.path),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ResultView {
     pub id: Option<String>,
@@ -216,6 +226,13 @@ pub fn summary(plan: &PlanView, results: Option<&ResultsView>, run: &Run) -> Str
                 None => {
                     let _ = writeln!(out, "- Result: **{}**", result.outcome);
                 }
+            }
+            if result.outcome == crate::publish::UNCHANGED {
+                let _ = writeln!(
+                    out,
+                    "- :warning: {}",
+                    text(crate::publish::UNCHANGED_MESSAGE)
+                );
             }
         }
         for warning in &module.warnings {
@@ -432,6 +449,18 @@ pub fn annotations(plan: &PlanView, results: Option<&ResultsView>, run: &Run) ->
         for result in results
             .mods
             .iter()
+            .filter(|result| result.outcome == crate::publish::UNCHANGED)
+        {
+            out.push(command(
+                "warning",
+                None,
+                "pdx-ws: unchanged",
+                &format!("{}: {}", result.label(), crate::publish::UNCHANGED_MESSAGE),
+            ));
+        }
+        for result in results
+            .mods
+            .iter()
             .filter(|result| result.outcome == "failed")
         {
             let label = match &result.id {
@@ -604,6 +633,29 @@ mod tests {
             annotations.last().unwrap(),
             "::error title=pdx-ws publish failed::mod `alpha`: steamcmd could not build the \
              Workshop item (exit 9)"
+        );
+    }
+
+    #[test]
+    fn unchanged_mods_are_warnings() {
+        let results: ResultsView =
+            serde_json::from_str(&RESULTS.replace("\"failed\"", "\"unchanged\"")).unwrap();
+        let annotations = annotations(&plan(), Some(&results), &run());
+        assert_eq!(
+            annotations.last().unwrap(),
+            &format!(
+                "::warning title=pdx-ws%3A unchanged::mod `alpha`: {}",
+                crate::publish::UNCHANGED_MESSAGE
+            )
+        );
+        let summary = summary(&plan(), Some(&results), &run());
+        assert!(summary.contains("| unchanged |"), "{summary}");
+        assert!(
+            summary.contains(&format!(
+                "- :warning: {}\n",
+                crate::publish::UNCHANGED_MESSAGE
+            )),
+            "{summary}"
         );
     }
 

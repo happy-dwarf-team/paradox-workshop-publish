@@ -249,6 +249,7 @@ pub fn publish(
     Ok(Published {
         item_id,
         created: false,
+        unchanged: false,
     })
 }
 
