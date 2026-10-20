@@ -1,0 +1,282 @@
+# paradox-workshop-publish: publish Paradox Interactive game mods to the
+# Steam Workshop with pdx-ws (docs/spec/v1.md, section 11).
+#
+# How the steps fit together:
+# - Inputs reach the scripts through `env` only, never through `${{ }}` inside
+#   `run`, and credentials reach pdx-ws only as PDX_WS_STEAM_USERNAME and
+#   PDX_WS_STEAM_SESSION, never on its command line.
+# - pdx-ws gets its own temporary folder (TMPDIR, TMP and TEMP) inside the
+#   run's working folder. pdx-ws deletes the session after each steamcmd run
+#   and the steamcmd folder when it exits. Composite actions have no post
+#   step, so the `Clean up` step (`if: always()`, which also runs when the job
+#   is cancelled) deletes that temporary folder as well, in case pdx-ws was
+#   killed before it could.
+
+name: Paradox Workshop Publish
+description: Publish Paradox Interactive game mods to the Steam Workshop from their descriptors.
+author: happy-dwarf-team
+branding:
+  icon: upload-cloud
+  color: orange
+
+inputs:
+  mode:
+    description: How the plan reaches Steam, `steamcmd` or `client`.
+    required: false
+    default: steamcmd
+  config:
+    description: The path of workshop.toml, relative to the repository root.
+    required: false
+    default: workshop.toml
+  mod:
+    description: The `id` of the mod to publish; separate several with spaces, commas or new lines. Default, every mod in workshop.toml.
+    required: false
+    default: ''
+  steam-username:
+    description: The Steam user name for steamcmd mode. Keep it in a secret.
+    required: false
+    default: ''
+  steam-session:
+    description: The Steam session from `pdx-ws session export`. Keep it in a secret.
+    required: false
+    default: ''
+  change-note:
+    description: The change note in Markdown, e.g. the release body. Default, the changelog section for the descriptor version, else `Version <version>` with a link to the commit.
+    required: false
+    default: ''
+  dry-run:
+    description: '`true` plans and reports without sending anything to Steam. Always true on pull_request events.'
+    required: false
+    default: 'false'
+  pdx-ws-version:
+    description: The pdx-ws release to use, e.g. `v0.1.0` or `v1`. Default, the action's own tag.
+    required: false
+    default: ''
+  pdx-ws-path:
+    description: For testing this action only. A pdx-ws binary to use instead of downloading a release; it is not verified.
+    required: false
+    default: ''
+
+outputs:
+  item-id:
+    description: The Workshop item ID of the selected mod; empty with several mods.
+    value: ${{ steps.report.outputs.item-id }}
+  item-url:
+    description: The Workshop page of the selected mod; empty with several mods.
+    value: ${{ steps.report.outputs.item-url }}
+  plan-json:
+    description: The path of the publish plan of every selected mod, as `pdx-ws plan --json` writes it.
+    value: ${{ steps.plan.outputs.plan-json }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check the event
+      id: setup
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+        if [ "$EVENT_NAME" = pull_request_target ]; then
+          echo "::error title=paradox-workshop-publish::This action refuses to run on pull_request_target, which gives code from a pull request the repository's secrets. Use pull_request instead; it always runs as a dry run."
+          exit 1
+        fi
+        dry_run=$(printf '%s' "$DRY_RUN" | tr '[:upper:]' '[:lower:]')
+        case "$dry_run" in
+          true | false) ;;
+          *)
+            echo "::error title=paradox-workshop-publish::dry-run must be true or false, not '$DRY_RUN'"
+            exit 1
+            ;;
+        esac
+        reason=
+        if [ "$EVENT_NAME" = pull_request ] && [ "$dry_run" = false ]; then
+          dry_run=true
+          reason="pull_request events never publish"
+          echo "::notice title=paradox-workshop-publish::pull_request events never publish; this run is a dry run."
+        fi
+        temp=$RUNNER_TEMP
+        if command -v cygpath > /dev/null 2>&1; then temp=$(cygpath -u "$RUNNER_TEMP"); fi
+        work=$(mktemp -d "$temp/pdx-ws.XXXXXX")
+        mkdir -p "$work/tmp"
+        if command -v cygpath > /dev/null 2>&1; then work=$(cygpath -w "$work"); fi
+        {
+          echo "dry-run=$dry_run"
+          echo "dry-run-reason=$reason"
+          echo "work=$work"
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Install pdx-ws
+      id: install
+      shell: bash
+      env:
+        PDX_WS_PATH: ${{ inputs.pdx-ws-path }}
+        PDX_WS_VERSION: ${{ inputs.pdx-ws-version }}
+        ACTION_REF: ${{ github.action_ref }}
+        WORK: ${{ steps.setup.outputs.work }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        repo=happy-dwarf-team/paradox-workshop-publish
+        fail() {
+          echo "::error title=paradox-workshop-publish::$1"
+          exit 1
+        }
+        if [ -n "$PDX_WS_PATH" ]; then
+          [ -f "$PDX_WS_PATH" ] || fail "pdx-ws-path $PDX_WS_PATH is not a file"
+          echo "::warning title=paradox-workshop-publish::pdx-ws-path is for testing this action only; $PDX_WS_PATH is used without verification."
+          bin="$(cd "$(dirname "$PDX_WS_PATH")" && pwd)/$(basename "$PDX_WS_PATH")"
+        else
+          version=${PDX_WS_VERSION:-$ACTION_REF}
+          case "$version" in
+            v[0-9]*.[0-9]*.[0-9]* | [0-9]*.[0-9]*.[0-9]*)
+              version="v${version#v}"
+              ;;
+            v[0-9]* | [0-9]*)
+              # A floating tag such as v1: the newest release it covers.
+              prefix="v${version#v}"
+              auth=()
+              if [ -n "${GH_TOKEN:-}" ]; then auth=(-H "Authorization: Bearer $GH_TOKEN"); fi
+              version=$(curl -fsSL --retry 3 ${auth[@]+"${auth[@]}"} \
+                "https://api.github.com/repos/$repo/releases?per_page=100" \
+                | sed -n 's/.*"tag_name": *"\(v[0-9][0-9.]*\)".*/\1/p' \
+                | grep -E "^${prefix//./\\.}(\.[0-9]+)+$" | sort -V | tail -n 1 || true)
+              [ -n "$version" ] || fail "no pdx-ws release matches $prefix"
+              ;;
+            *)
+              fail "set pdx-ws-version to a pdx-ws release such as v0.1.0; the action ref '$version' is not a release tag"
+              ;;
+          esac
+          case "$RUNNER_OS/$RUNNER_ARCH" in
+            Linux/X64) target=x86_64-unknown-linux-gnu ext=tar.xz ;;
+            Windows/X64) target=x86_64-pc-windows-msvc ext=zip ;;
+            macOS/ARM64) target=aarch64-apple-darwin ext=tar.xz ;;
+            macOS/X64) target=x86_64-apple-darwin ext=tar.xz ;;
+            *) fail "pdx-ws has no release for $RUNNER_OS on $RUNNER_ARCH" ;;
+          esac
+          archive="pdx-ws-$target.$ext"
+          url="https://github.com/$repo/releases/download/$version/$archive"
+          echo "Downloading $url"
+          curl -fsSL --retry 3 -o "$WORK/$archive" "$url" || fail "cannot download $url"
+          if command -v gh > /dev/null 2>&1; then
+            gh attestation verify "$WORK/$archive" --repo "$repo" \
+              || fail "the attestation of $archive does not verify; it was not built by $repo"
+          else
+            echo "::warning title=paradox-workshop-publish::gh is not installed, so the build attestation of $archive is not verified; only its SHA-256 from the release is checked."
+            curl -fsSL --retry 3 -o "$WORK/$archive.sha256" "$url.sha256" \
+              || fail "cannot download $url.sha256"
+            expected=$(tr -d '\r' < "$WORK/$archive.sha256" | awk '{print $1; exit}')
+            if command -v sha256sum > /dev/null 2>&1; then
+              actual=$(sha256sum "$WORK/$archive" | awk '{print $1}')
+            else
+              actual=$(shasum -a 256 "$WORK/$archive" | awk '{print $1}')
+            fi
+            [ "$expected" = "$actual" ] || fail "$archive has SHA-256 $actual, but the release says $expected"
+          fi
+          mkdir -p "$WORK/release"
+          if [ "$ext" = zip ]; then
+            ARCHIVE="$WORK/$archive" DESTINATION="$WORK/release" powershell -NoProfile -NonInteractive -Command \
+              'Expand-Archive -LiteralPath $env:ARCHIVE -DestinationPath $env:DESTINATION'
+          else
+            tar -xJf "$WORK/$archive" -C "$WORK/release"
+          fi
+          bin=$(find "$WORK/release" -type f \( -name pdx-ws -o -name pdx-ws.exe \) | head -n 1)
+          [ -n "$bin" ] || fail "$archive holds no pdx-ws binary"
+          chmod +x "$bin"
+        fi
+        "$bin" --version
+        echo "bin=$bin" >> "$GITHUB_OUTPUT"
+
+    - name: Plan
+      id: plan
+      shell: bash
+      env:
+        PDX_WS: ${{ steps.install.outputs.bin }}
+        WORK: ${{ steps.setup.outputs.work }}
+        CONFIG: ${{ inputs.config }}
+        MODS: ${{ inputs.mod }}
+        CHANGE_NOTE: ${{ inputs.change-note }}
+        TMPDIR: ${{ steps.setup.outputs.work }}/tmp
+        TMP: ${{ steps.setup.outputs.work }}/tmp
+        TEMP: ${{ steps.setup.outputs.work }}/tmp
+      run: |
+        set -euo pipefail
+        args=(--config "$CONFIG")
+        IFS=$' \t\n,' read -r -d '' -a ids <<< "$MODS" || true
+        for id in ${ids[@]+"${ids[@]}"}; do args+=(--mod "$id"); done
+        if [ -n "$CHANGE_NOTE" ]; then args+=(--change-note "$CHANGE_NOTE"); fi
+        "$PDX_WS" plan "${args[@]}"
+        "$PDX_WS" plan "${args[@]}" --json > "$WORK/plan.json"
+        plan_json="$WORK/plan.json"
+        if command -v cygpath > /dev/null 2>&1; then plan_json=$(cygpath -w "$plan_json"); fi
+        echo "plan-json=$plan_json" >> "$GITHUB_OUTPUT"
+
+    - name: Publish
+      id: publish
+      if: steps.setup.outputs.dry-run != 'true'
+      shell: bash
+      env:
+        PDX_WS: ${{ steps.install.outputs.bin }}
+        WORK: ${{ steps.setup.outputs.work }}
+        MODE: ${{ inputs.mode }}
+        CONFIG: ${{ inputs.config }}
+        MODS: ${{ inputs.mod }}
+        CHANGE_NOTE: ${{ inputs.change-note }}
+        PDX_WS_STEAM_USERNAME: ${{ inputs.steam-username }}
+        PDX_WS_STEAM_SESSION: ${{ inputs.steam-session }}
+        TMPDIR: ${{ steps.setup.outputs.work }}/tmp
+        TMP: ${{ steps.setup.outputs.work }}/tmp
+        TEMP: ${{ steps.setup.outputs.work }}/tmp
+      run: |
+        set -uo pipefail
+        args=(--config "$CONFIG" --mode "$MODE")
+        IFS=$' \t\n,' read -r -d '' -a ids <<< "$MODS" || true
+        for id in ${ids[@]+"${ids[@]}"}; do args+=(--mod "$id"); done
+        if [ -n "$CHANGE_NOTE" ]; then args+=(--change-note "$CHANGE_NOTE"); fi
+        code=0
+        "$PDX_WS" publish "${args[@]}" --json > "$WORK/results.json" < /dev/null || code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+    - name: Report
+      id: report
+      if: always() && steps.plan.outcome == 'success'
+      shell: bash
+      env:
+        PDX_WS: ${{ steps.install.outputs.bin }}
+        WORK: ${{ steps.setup.outputs.work }}
+        CONFIG: ${{ inputs.config }}
+        DRY_RUN: ${{ steps.setup.outputs.dry-run }}
+        DRY_RUN_REASON: ${{ steps.setup.outputs.dry-run-reason }}
+        PUBLISH_EXIT: ${{ steps.publish.outputs.exit-code }}
+      run: |
+        set -euo pipefail
+        args=(--plan "$WORK/plan.json" --config "$CONFIG" --summary-copy "$WORK/summary.md")
+        if [ "$DRY_RUN" = true ]; then
+          args+=(--dry-run)
+          if [ -n "$DRY_RUN_REASON" ]; then args+=(--dry-run-reason "$DRY_RUN_REASON"); fi
+        else
+          args+=(--results "$WORK/results.json")
+          if [ -n "$PUBLISH_EXIT" ]; then args+=(--publish-exit "$PUBLISH_EXIT"); fi
+        fi
+        "$PDX_WS" github-report "${args[@]}"
+
+    - name: Clean up
+      if: always() && steps.setup.outputs.work != ''
+      shell: bash
+      env:
+        WORK: ${{ steps.setup.outputs.work }}
+      run: |
+        # The session and steamcmd live in tmp; plan.json and summary.md stay
+        # for the plan-json output.
+        rm -rf "$WORK/tmp" "$WORK/release" "$WORK"/*.zip "$WORK"/*.tar.xz "$WORK"/*.sha256
+
+    - name: Fail when a mod was not published
+      if: steps.publish.outputs.exit-code != '' && steps.publish.outputs.exit-code != '0'
+      shell: bash
+      env:
+        CODE: ${{ steps.publish.outputs.exit-code }}
+      run: |
+        echo "::error title=paradox-workshop-publish::pdx-ws publish exited with code $CODE; the job summary has the result of each mod."
+        exit "$CODE"

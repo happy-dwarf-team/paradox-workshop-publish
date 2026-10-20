@@ -1,10 +1,12 @@
 //! `pdx-ws`: publish Paradox Interactive game mods to the Steam Workshop.
 //!
-//! `plan` and `publish --mode steamcmd` are implemented; the other commands
-//! are declared and exit with code 2 until their step of the implementation
-//! sequence in `docs/spec/v1.md` (section 14) implements them.
+//! `plan`, `publish --mode steamcmd` and `session export` are implemented,
+//! plus the hidden `github-report` that the GitHub Action runs; the other
+//! commands are declared and exit with code 2 until their step of the
+//! implementation sequence in `docs/spec/v1.md` (section 14) implements them.
 
 use std::fmt;
+use std::fs;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -13,6 +15,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use pdx_ws::change_note::ChangeNoteInput;
 use pdx_ws::config::{self, Config};
 use pdx_ws::exit;
+use pdx_ws::github;
 use pdx_ws::plan::Plan;
 use pdx_ws::publish::{self, Outcome};
 use pdx_ws::steamcmd::export;
@@ -37,6 +40,37 @@ enum Command {
     /// Manage the Steam session used by `steamcmd` mode.
     #[command(subcommand)]
     Session(SessionCommand),
+    /// Internal to the GitHub Action: write the job summary, annotations
+    /// and outputs from the JSON of `plan` and `publish`.
+    #[command(hide = true)]
+    GithubReport(GithubReportArgs),
+}
+
+#[derive(Debug, Args)]
+struct GithubReportArgs {
+    /// The output of `plan --json`.
+    #[arg(long, value_name = "PATH")]
+    plan: PathBuf,
+    /// The output of `publish --json`; empty or missing when `publish`
+    /// stopped before publishing.
+    #[arg(long, value_name = "PATH")]
+    results: Option<PathBuf>,
+    /// `workshop.toml` as the workflow named it, relative to the repository
+    /// root.
+    #[arg(long, value_name = "PATH", default_value = config::FILE_NAME)]
+    config: String,
+    /// Nothing was sent to Steam.
+    #[arg(long)]
+    dry_run: bool,
+    /// Why the run is a dry run when the workflow did not ask for one.
+    #[arg(long, value_name = "TEXT")]
+    dry_run_reason: Option<String>,
+    /// The exit code of `publish`.
+    #[arg(long, value_name = "CODE")]
+    publish_exit: Option<u8>,
+    /// Also write the summary to this file.
+    #[arg(long, value_name = "PATH")]
+    summary_copy: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -117,6 +151,7 @@ impl Command {
             Command::Publish(_) => "publish",
             Command::Init => "init",
             Command::Session(SessionCommand::Export(_)) => "session export",
+            Command::GithubReport(_) => "github-report",
         }
     }
 }
@@ -170,6 +205,7 @@ fn main() -> ExitCode {
         Command::Plan(args) => plan(args),
         Command::Publish(args) => publish(args),
         Command::Session(SessionCommand::Export(args)) => session_export(args),
+        Command::GithubReport(args) => github_report(args),
         command => {
             eprintln!("pdx-ws {}: not implemented yet", command.name());
             // Unimplemented commands use the configuration/validation exit code.
@@ -335,6 +371,75 @@ fn session_export(args: &ExportArgs) -> Result<(), Failure> {
         "\nThe Steam session for {user} went to stdout; the local copy is deleted.\n\n{}",
         export::guidance(&user)
     );
+    Ok(())
+}
+
+/// `pdx-ws github-report`, run by the GitHub Action after `plan` and
+/// `publish`: the job summary goes to `GITHUB_STEP_SUMMARY`, the outputs to
+/// `GITHUB_OUTPUT` and the annotations to stdout.
+fn github_report(args: &GithubReportArgs) -> Result<(), Failure> {
+    let failure = |message: String| Failure {
+        label: None,
+        message,
+        details: Vec::new(),
+        code: exit::VALIDATION,
+    };
+    let read = |path: &std::path::Path| {
+        fs::read_to_string(path)
+            .map_err(|error| failure(format!("cannot read {}: {error}", path.display())))
+    };
+    let plan: github::PlanView = serde_json::from_str(&read(&args.plan)?)
+        .map_err(|error| failure(format!("{} is not a plan: {error}", args.plan.display())))?;
+    let results = match &args.results {
+        Some(path) if path.is_file() => {
+            let text = read(path)?;
+            if text.trim().is_empty() {
+                None
+            } else {
+                Some(
+                    serde_json::from_str::<github::ResultsView>(&text).map_err(|error| {
+                        failure(format!(
+                            "{} is not a publish result: {error}",
+                            path.display()
+                        ))
+                    })?,
+                )
+            }
+        }
+        _ => None,
+    };
+    let run = github::Run {
+        dry_run: args.dry_run,
+        dry_run_reason: args.dry_run_reason.clone(),
+        publish_exit: args.publish_exit,
+        config: args.config.clone(),
+    };
+
+    let summary = github::summary(&plan, results.as_ref(), &run);
+    let append = |variable: &str, text: &str| -> Result<(), Failure> {
+        let Some(path) = std::env::var_os(variable) else {
+            return Ok(());
+        };
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut file| file.write_all(text.as_bytes()))
+            .map_err(|error| failure(format!("cannot write {variable}: {error}")))
+    };
+    append("GITHUB_STEP_SUMMARY", &summary)?;
+    if let Some(path) = &args.summary_copy {
+        fs::write(path, &summary)
+            .map_err(|error| failure(format!("cannot write {}: {error}", path.display())))?;
+    }
+    let outputs: String = github::outputs(&plan, results.as_ref())
+        .iter()
+        .map(|(key, value)| format!("{key}={value}\n"))
+        .collect();
+    append("GITHUB_OUTPUT", &outputs)?;
+    for annotation in github::annotations(&plan, results.as_ref(), &run) {
+        println!("{annotation}");
+    }
     Ok(())
 }
 

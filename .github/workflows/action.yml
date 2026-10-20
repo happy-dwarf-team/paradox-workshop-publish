@@ -1,0 +1,98 @@
+name: action
+
+# Runs the GitHub Action from this checkout (`uses: ./`) with a pdx-ws built
+# here, as a dry run on fixture mods: nothing is sent to Steam.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  dry-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Rust toolchain
+        shell: bash
+        run: rustup toolchain install --no-self-update
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Build pdx-ws
+        shell: bash
+        run: |
+          cargo build --locked
+          bin=target/debug/pdx-ws
+          if [ "$RUNNER_OS" = Windows ]; then bin=$bin.exe; fi
+          echo "PDX_WS_BIN=$bin" >> "$GITHUB_ENV"
+
+      - name: One mod
+        id: one
+        uses: ./
+        with:
+          config: tests/fixtures/eu4/workshop.toml
+          change-note: Hotfix for **Riga**
+          dry-run: true
+          steam-username: must-not-be-used
+          steam-session: must-not-be-used
+          pdx-ws-path: ${{ env.PDX_WS_BIN }}
+
+      - name: Check the outputs for one mod
+        shell: bash
+        env:
+          ITEM_ID: ${{ steps.one.outputs.item-id }}
+          ITEM_URL: ${{ steps.one.outputs.item-url }}
+          PLAN_JSON: ${{ steps.one.outputs.plan-json }}
+        run: |
+          set -euxo pipefail
+          test "$ITEM_ID" = 2948217283
+          test "$ITEM_URL" = "https://steamcommunity.com/sharedfiles/filedetails/?id=2948217283"
+          plan=$PLAN_JSON
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          test "$(jq '.mods | length' "$plan")" = 1
+          test "$(jq -r '.mods[0].metadata.change_note' "$plan")" = 'Hotfix for [b]Riga[/b]'
+          # The action keeps a copy of the job summary next to plan-json.
+          summary="$(dirname "$plan")/summary.md"
+          grep -Fx '## pdx-ws plan (dry run)' "$summary"
+          grep -F '### `.`: Fixture Mod' "$summary"
+          grep -F '<summary>Change note (BBCode)</summary>' "$summary"
+          # The clean-up step deleted pdx-ws's temporary folder.
+          test ! -e "$(dirname "$plan")/tmp"
+
+      - name: Several mods
+        id: several
+        uses: ./
+        with:
+          config: tests/fixtures/multi/workshop.toml
+          mod: alpha, beta
+          dry-run: true
+          pdx-ws-path: ${{ env.PDX_WS_BIN }}
+
+      - name: Check the outputs for several mods
+        shell: bash
+        env:
+          ITEM_ID: ${{ steps.several.outputs.item-id }}
+          ITEM_URL: ${{ steps.several.outputs.item-url }}
+          PLAN_JSON: ${{ steps.several.outputs.plan-json }}
+        run: |
+          set -euxo pipefail
+          test -z "$ITEM_ID"
+          test -z "$ITEM_URL"
+          plan=$PLAN_JSON
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          test "$(jq -r '[.mods[].id] | join(",")' "$plan")" = alpha,beta

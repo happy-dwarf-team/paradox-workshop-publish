@@ -27,6 +27,55 @@ fn fixture_config(name: &str) -> String {
 }
 
 #[test]
+fn github_report_writes_the_summary_outputs_and_annotations() {
+    let dir = tempfile::tempdir().unwrap();
+    let plan = pdx_ws(&["plan", "--config", &fixture_config("eu4"), "--json"]);
+    assert_eq!(plan.status.code(), Some(0));
+    let plan_json = dir.path().join("plan.json");
+    std::fs::write(&plan_json, &plan.stdout).unwrap();
+    let summary = dir.path().join("summary.md");
+    let outputs = dir.path().join("outputs");
+    let copy = dir.path().join("copy.md");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_pdx-ws"))
+        .args(["github-report", "--plan"])
+        .arg(&plan_json)
+        .args([
+            "--config",
+            "tests/fixtures/eu4/workshop.toml",
+            "--dry-run",
+            "--summary-copy",
+        ])
+        .arg(&copy)
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .env("GITHUB_OUTPUT", &outputs)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+
+    let summary = std::fs::read_to_string(&summary).unwrap();
+    assert!(
+        summary.starts_with("## pdx-ws plan (dry run)\n"),
+        "{summary}"
+    );
+    assert!(summary.contains("### `.`: Fixture Mod"), "{summary}");
+    assert_eq!(std::fs::read_to_string(&copy).unwrap(), summary);
+    assert_eq!(
+        std::fs::read_to_string(&outputs).unwrap(),
+        "item-id=2948217283\n\
+         item-url=https://steamcommunity.com/sharedfiles/filedetails/?id=2948217283\n"
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains(
+            "::warning file=tests/fixtures/eu4/common/ideas/fixture_ideas.txt,title=Checksum \
+             change::"
+        ),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn plan_prints_text() {
     let output = pdx_ws(&["plan", "--config", &fixture_config("eu4")]);
     assert_eq!(output.status.code(), Some(0));
