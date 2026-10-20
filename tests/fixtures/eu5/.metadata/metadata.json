@@ -1,0 +1,13 @@
+{
+  "name": "EU5 Fixture",
+  "id": "eu5_fixture",
+  "version": "0.3.0",
+  "game_id": "eu5",
+  "supported_game_version": "1.0.*",
+  "short_description": "An EU5 fixture mod",
+  "tags": ["Gameplay", "Map", "1.0"],
+  "picture": "thumbnail.png",
+  "relationships": [],
+  "game_custom_data": { "multiplayer_synchronized": true, "replace_paths": ["in_game/map_data"] },
+  "cmf_last_updated_game_version": "1.0.3"
+}

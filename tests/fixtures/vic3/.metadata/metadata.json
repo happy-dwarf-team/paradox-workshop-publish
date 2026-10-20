@@ -1,0 +1,11 @@
+﻿{
+  "name": "Vic3 Fixture",
+  "id": "com.example.vic3fixture",
+  "version": "2.0.1",
+  "game_id": "victoria3",
+  "supported_game_version": "1.9.*",
+  "short_description": "A Victoria 3 fixture mod",
+  "tags": ["Economy", "1.9"],
+  "relationships": [],
+  "game_custom_data": { "multiplayer_synchronized": true }
+}
