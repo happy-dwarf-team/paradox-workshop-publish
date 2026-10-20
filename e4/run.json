@@ -1,10 +1,10 @@
 {
-  "label": "run1-create-windows",
+  "label": "run2-update-windows-same-secret",
   "os": "windows-latest",
-  "publishedfileid": "0",
-  "revision": 1,
-  "keys": ["title", "description", "previewfile", "visibility"],
+  "publishedfileid": "3823257732",
+  "revision": 2,
+  "keys": [],
   "extra_vdf": {},
-  "change_note": "E4 run 1: create from a GitHub-hosted runner",
+  "change_note": "E4 run 2: content-only update with the same session secret",
   "fail_tests": false
 }
