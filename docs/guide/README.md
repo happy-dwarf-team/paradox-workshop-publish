@@ -1,6 +1,6 @@
 # User guide
 
-`pdx-ws` publishes a Paradox mod to its Steam Workshop item. The GitHub Action runs it in CI. Parts marked **coming in 0.1.0** are designed but not released yet; see the status note in the [README](../../README.md).
+`pdx-ws` publishes a Paradox mod to its Steam Workshop item. The GitHub Action runs it in CI.
 
 1. [First-time setup](setup.md): install `pdx-ws`, create the Workshop item, save a Steam session, create the `steam-workshop` environment.
 2. [`workshop.toml` reference](workshop-toml.md): every key, and what each game needs.
@@ -22,8 +22,8 @@ The [examples](../examples) are complete workflows you can copy:
 | Command | Does | Logs in to Steam |
 | --- | --- | --- |
 | `pdx-ws plan` | Prints the *publish plan*: files, metadata, target item, warnings. Sends nothing. | Never |
-| `pdx-ws publish` | Executes the plan in `steamcmd` mode (default) or `client` mode (coming in 0.1.0). | Yes |
-| `pdx-ws init` | Creates the Workshop item in `client` mode and writes its ID back (coming in 0.1.0). | Yes |
+| `pdx-ws publish` | Executes the plan in `steamcmd` mode (default) or `client` mode. | Yes |
+| `pdx-ws init` | Creates the Workshop item in `client` mode and writes its ID back. | Yes |
 | `pdx-ws session export` | Logs in to steamcmd interactively and prints the *Steam session* to stdout. | Yes |
 
 Common flags:

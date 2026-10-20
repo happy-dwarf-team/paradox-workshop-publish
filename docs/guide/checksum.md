@@ -46,4 +46,4 @@ The rules are built into `pdx-ws`, with:
 
 They are picked by the descriptor's `supported_version`. When no table matches, the newest one is used, and the plan says so.
 
-When `client` mode runs on a computer with the game installed, it will also compare the installed `checksum_manifest.txt` with the built-in rules and report any drift (coming in 0.1.0).
+When `client` mode runs on a computer with the game installed, it also compares the installed `checksum_manifest.txt` with the built-in rules and reports any drift as a warning.

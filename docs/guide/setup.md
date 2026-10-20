@@ -4,15 +4,21 @@ You do these steps once per mod, or once per maintainer for the session. Afterwa
 
 ## 1. Install `pdx-ws`
 
-Release binaries for Windows, Linux and macOS are **coming in 0.1.0**. Until then, build from source with Rust (`rustup` picks the pinned toolchain):
+Download the archive for your system from the [releases](https://github.com/happy-dwarf-team/paradox-workshop-publish/releases): `pdx-ws-x86_64-pc-windows-msvc.zip`, `pdx-ws-x86_64-unknown-linux-gnu.tar.xz`, `pdx-ws-aarch64-apple-darwin.tar.xz` (Apple silicon) or `pdx-ws-x86_64-apple-darwin.tar.xz` (Intel Mac). You can check where it was built:
+
+```sh
+gh attestation verify pdx-ws-x86_64-pc-windows-msvc.zip --repo happy-dwarf-team/paradox-workshop-publish
+```
+
+Unpack it and keep its files together: the Steamworks `steam_api` library next to `pdx-ws` is what `client` mode and `pdx-ws init` talk to Steam through, and on Linux and macOS `pdx-ws` does not start without it. Put the folder on your `PATH`. `THIRD_PARTY_NOTICES` in the archive says whose that library is.
+
+To build from source instead, use Rust (`rustup` picks the pinned toolchain) and copy `steam_api` from `target/release/build/steamworks-sys-*/out/` next to the binary:
 
 ```sh
 git clone https://github.com/happy-dwarf-team/paradox-workshop-publish
 cd paradox-workshop-publish
 cargo build --release --locked
 ```
-
-Then put `target/release/pdx-ws` (`pdx-ws.exe` on Windows) on your `PATH`.
 
 ## 2. Write `workshop.toml`
 
@@ -28,8 +34,6 @@ game = "eu4"
 The [reference](workshop-toml.md) lists every key. Then run `pdx-ws plan` and read what it would publish: the files, the title and tags from the descriptor, the preview, the description and change note, and any warnings.
 
 ## 3. Create the Workshop item in `client` mode
-
-> **Coming in 0.1.0.** `client` mode and `pdx-ws init` are not released yet. Until then, create the item the way you do today (for example from the game launcher) and put its ID into the descriptor yourself, as described below.
 
 Run this once, on a computer where:
 

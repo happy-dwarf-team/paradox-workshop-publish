@@ -1,0 +1,29 @@
+Third-party notices for the pdx-ws release archives
+====================================================
+
+pdx-ws itself is licensed under the MIT licence in LICENSE. This archive also
+contains a file that is NOT part of pdx-ws and NOT covered by that licence.
+
+Steamworks API (steam_api64.dll, libsteam_api.so or libsteam_api.dylib)
+-------------------------------------------------------------------------
+
+Copyright (c) Valve Corporation. All rights reserved.
+
+This file is part of the "redistributable_bin" folder of the Steamworks SDK,
+version 1.64, and is distributed unmodified together with pdx-ws under the
+Steamworks SDK Access Agreement
+(https://partner.steamgames.com/documentation/sdk_access_agreement), section
+1.1(b), by the pdx-ws maintainer as Licensee. Valve's terms apply to it; the
+MIT licence of pdx-ws does not. Steam and the Steam logo are trademarks of
+Valve Corporation.
+
+The release build checks the file's SHA-256 against the official SDK 1.64
+before packaging it.
+
+Rust crates
+-----------
+
+The pdx-ws binary is built from Rust crates published on crates.io under their
+own licences, mostly MIT and Apache-2.0. Cargo.lock in the source repository
+(https://github.com/happy-dwarf-team/paradox-workshop-publish) lists them with
+their exact versions.

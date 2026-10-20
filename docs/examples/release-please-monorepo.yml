@@ -56,7 +56,6 @@ jobs:
           PATHS: ${{ needs.release-please.outputs.paths_released }}
         run: echo "ids=$(jq -r 'map(split("/") | last) | join(" ")' <<< "$PATHS")" >> "$GITHUB_OUTPUT"
 
-      # Coming in 0.1.0: the action needs a pdx-ws release to download.
       # No change-note input: each mod's change note comes from its own
       # changelog section for its new version.
       - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0

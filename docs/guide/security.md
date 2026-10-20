@@ -48,8 +48,6 @@ Both also sign you out of Steam everywhere else. Afterwards, create a new sessio
 
 ## `client` mode on self-hosted runners
 
-> `client` mode is coming in 0.1.0.
-
 On a self-hosted runner, `client` mode publishes through the Steam client that is logged in there. **Any workflow that runs on that runner can publish as that Steam user.** Use it only with **private repositories**, where outside pull requests cannot run workflows on your machine. See [Self-hosted runner for `client` mode](self-hosted-client-mode.md).
 
 ## The Steam Subscriber Agreement

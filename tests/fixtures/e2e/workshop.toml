@@ -1,0 +1,6 @@
+schema = 1
+
+# The E2E test item (.github/workflows/e2e.yml). No visibility, description
+# or preview: the E2E run changes only the content, the title and a change note.
+[[mod]]
+game = "eu4"
