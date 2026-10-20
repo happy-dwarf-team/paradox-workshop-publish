@@ -1,0 +1,15 @@
+[package]
+name = "pdx-ws"
+# Set by release-please; 0.0.0 until the first release (0.1.0).
+version = "0.0.0"
+description = "Publish Paradox Interactive game mods to the Steam Workshop"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+clap = { version = "4.6", features = ["derive"] }
+
+[lints]
+workspace = true

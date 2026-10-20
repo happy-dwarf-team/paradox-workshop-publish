@@ -1,0 +1,16 @@
+# cargo-dist (https://axodotdev.github.io/cargo-dist/) builds the release archives.
+# Building only for now: there is no `ci` key, so no release workflow is
+# generated and nothing is published. Publishing, attestations and the
+# steam_api files come with the release pipeline (docs/spec/v1.md, step 11).
+[workspace]
+members = ["cargo:."]
+
+[dist]
+cargo-dist-version = "0.33.0"
+installers = []
+targets = [
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+]
