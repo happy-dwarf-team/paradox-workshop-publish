@@ -1,10 +1,10 @@
 {
-  "label": "run2-update-windows-same-secret",
-  "os": "windows-latest",
+  "label": "run3-update-ubuntu-windows-session",
+  "os": "ubuntu-latest",
   "publishedfileid": "3823257732",
-  "revision": 2,
+  "revision": 3,
   "keys": [],
   "extra_vdf": {},
-  "change_note": "E4 run 2: content-only update with the same session secret",
+  "change_note": "E4 run 3: update from ubuntu-latest with a session made on Windows",
   "fail_tests": false
 }
