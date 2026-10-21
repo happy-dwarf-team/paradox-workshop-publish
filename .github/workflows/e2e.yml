@@ -5,9 +5,11 @@ name: e2e
 # test item from tests/fixtures/e2e, then steamcmd downloads the item again and
 # its files are compared with the published copy.
 #
-# The item is EU4 item 3823619285, owned by @s-tyda and Unlisted. The fixture
-# sets no visibility, description or preview, so only the content, the title
-# and a change note change. Every job waits for a reviewer of the
+# The item is EU4 item 3823787485, owned by @s-tyda and Unlisted. It was
+# created with `pdx-ws init` on 2026-10-21, after the first test item
+# (3823619285) disappeared from the Workshop. The fixture sets no visibility,
+# description or preview, so only the content, the title and a change note
+# change. Every job waits for a reviewer of the
 # steam-workshop-e2e environment, which holds STEAM_USERNAME and
 # STEAM_SESSION. release.yml dispatches this workflow on the release-please
 # pull request; it can also be run by hand.
@@ -22,7 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ITEM_ID: "3823619285"
+  ITEM_ID: "3823787485"
   APP_ID: "236850"
 
 jobs:
