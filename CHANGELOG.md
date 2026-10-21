@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.2...v0.1.3) (2026-10-21)
+
+
+### Bug Fixes
+
+* space BBCode blocks like the team's hand-written Workshop pages ([#45](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/45)) ([9a9693e](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/9a9693e6ed7204fa6d324761955b54b41668727a))
+
 ## [0.1.2](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.1...v0.1.2) (2026-10-21)
 
 
