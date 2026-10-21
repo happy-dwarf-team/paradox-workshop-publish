@@ -35,6 +35,14 @@ Some constructs are handled specially:
 
 - **Inline `code`** becomes plain text, because Steam has no inline code style.
 - **Line breaks are kept.** A new line inside a paragraph stays a new line on Steam, as GitHub shows it in comments, so a list of credits written one per line keeps one per line. A blank line starts a new paragraph. To join lines into one on Steam, write them on one line.
+- **Spacing between blocks** follows the team's hand-written Workshop pages, because Steam already puts space around headings, lists and images:
+  - a heading is followed by a single new line, so its text or list starts right under it;
+  - an image on its own line (e.g. a divider) has a single new line on both sides;
+  - a list has a single new line before and after it;
+  - a heading that follows text or a list gets a blank line before it, as between FAQ entries;
+  - paragraphs, quotes, code blocks, tables and rules are separated by a blank line.
+
+  In Markdown, keep the usual blank lines between blocks; the converter decides the spacing on Steam.
 - **Text with `[`** goes in `[noparse]`, so Steam does not read it as a tag.
 - **HTML comments** (`<!-- … -->`) are dropped.
 

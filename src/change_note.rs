@@ -323,7 +323,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             note.bbcode,
-            "[h3]Features[/h3]\n\n[list]\n[*][b]missions:[/b] add the Baltic tree \
+            "[h3]Features[/h3]\n[list]\n[*][b]missions:[/b] add the Baltic tree \
              ([url=https://github.com/o/r/commit/abc1234]abc1234[/url])\n[/list]"
         );
         assert_eq!(
