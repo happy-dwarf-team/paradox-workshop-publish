@@ -98,7 +98,7 @@ fn plan_prints_text() {
     );
     assert!(
         stdout.contains(
-            "  Change note:    from docs/CHANGELOG.md, version 1.4.2\n    | [h3]Bug Fixes[/h3]\n"
+            "  Change note:    from docs/CHANGELOG.md, version 1.4.2\n    | [b]Version 1.4.2[/b]\n    | [b]Fixes[/b]\n"
         ),
         "{stdout}"
     );

@@ -67,6 +67,18 @@ Each publish attaches a change note, shown on the item's *Change Notes* page. `p
 
 All three go through the same Markdown converter, with the same errors.
 
+### Notes for players
+
+Change notes are read by players, so the explicit note and the changelog section are tidied after conversion. release-please's release notes become a short note:
+
+| release-please writes | Steam shows |
+| --- | --- |
+| `## [0.9.0](…/compare/v0.8.0...v0.9.0) (2026-10-21)` | **Version 0.9.0** (Steam already shows the date) |
+| `### Features` / `### Bug Fixes` / `### Performance Improvements` | **New** / **Fixes** / **Faster**; other headings become bold lines with their own name |
+| `* publish the mod ([#32](…)) ([e7280ef](…))` | • Publish the mod (no pull request, issue or commit links; the first letter is capitalised, after a `**scope:**` if there is one) |
+
+A changelog section, whose version heading is not part of it, gets **Version x.y.z** as its first line. A hand-written note without headings, references or lowercase list items passes through unchanged; ordinary links stay.
+
 ### When Steam keeps the old version
 
 Steam records a change note only with a new version of the content. If the published copy is byte for byte what the item already has (for example a release that changed only files `pdx-ws` leaves out, or a first publish of what the launcher uploaded before), Steam keeps the current version: the item's update date stays and the change note is dropped. steamcmd still prints `Success`.
