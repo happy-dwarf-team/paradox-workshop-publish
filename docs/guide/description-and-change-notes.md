@@ -34,7 +34,7 @@ Steam takes at most 8000 bytes, which `pdx-ws` checks after the conversion. Acce
 Some constructs are handled specially:
 
 - **Inline `code`** becomes plain text, because Steam has no inline code style.
-- **Line breaks inside a paragraph** become spaces, because Steam would show every new line. End a line with two spaces to force a break.
+- **Line breaks are kept.** A new line inside a paragraph stays a new line on Steam, as GitHub shows it in comments, so a list of credits written one per line keeps one per line. A blank line starts a new paragraph. To join lines into one on Steam, write them on one line.
 - **Text with `[`** goes in `[noparse]`, so Steam does not read it as a tag.
 - **HTML comments** (`<!-- … -->`) are dropped.
 

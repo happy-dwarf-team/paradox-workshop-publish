@@ -4,7 +4,9 @@
 //! Supported: headings 1 to 3, bold, italic, strikethrough, links, lists,
 //! quotes, code, horizontal rules, tables and images with absolute URLs.
 //! Raw HTML, footnotes, relative image paths and deeper headings are errors
-//! that name the line; HTML comments are dropped.
+//! that name the line; HTML comments are dropped. A line break inside a
+//! paragraph stays a line break, and paragraphs are separated by a blank
+//! line.
 
 use std::borrow::Cow;
 
@@ -148,7 +150,10 @@ impl Writer {
                     self.inline(&text);
                 }
             }
-            Event::SoftBreak => self.inline(" "),
+            // Steam shows a newline as a line break, so a line break inside a
+            // paragraph stays one, as GitHub shows it in comments.
+            Event::SoftBreak if !self.image => self.inline("\n"),
+            Event::SoftBreak => {}
             Event::HardBreak => self.push("\n"),
             Event::Rule => {
                 self.open_block();
@@ -401,7 +406,52 @@ mod tests {
     fn headings_and_paragraphs() {
         assert_eq!(
             convert("# Title\n\nFirst line\nsame paragraph.\n\n## Part\n### Sub\n\nEnd."),
-            "[h1]Title[/h1]\n\nFirst line same paragraph.\n\n[h2]Part[/h2]\n\n[h3]Sub[/h3]\n\nEnd."
+            "[h1]Title[/h1]\n\nFirst line\nsame paragraph.\n\n[h2]Part[/h2]\n\n[h3]Sub[/h3]\n\nEnd."
+        );
+    }
+
+    #[test]
+    fn line_breaks_inside_a_paragraph_stay() {
+        // Bellows' credits: one line per credit, no blank lines between.
+        assert_eq!(
+            convert(
+                "**Anvil** for letting a dwarf into the forge.\n\
+                 **mimalloc** by Microsoft for the faster memory handling.\n"
+            ),
+            "[b]Anvil[/b] for letting a dwarf into the forge.\n\
+             [b]mimalloc[/b] by Microsoft for the faster memory handling."
+        );
+        // The team's FAQ answer, then the next paragraph after a blank line.
+        assert_eq!(
+            convert(
+                "I like dwarves.\nI like being happy.\nI am, in fact, a happy dwarf myself.\n\n\
+                 Next question."
+            ),
+            "I like dwarves.\nI like being happy.\nI am, in fact, a happy dwarf myself.\n\n\
+             Next question."
+        );
+        // Hard breaks (two spaces or a backslash) are line breaks too.
+        assert_eq!(convert("a  \nb\\\nc\nd"), "a\nb\nc\nd");
+        // CRLF files give the same result.
+        assert_eq!(convert("one\r\ntwo\r\n\r\nthree\r\n"), "one\ntwo\n\nthree");
+    }
+
+    #[test]
+    fn line_breaks_in_lists_quotes_and_headings() {
+        assert_eq!(
+            convert("- first line\n  second line\n- next"),
+            "[list]\n[*]first line\nsecond line\n[*]next\n[/list]"
+        );
+        assert_eq!(
+            convert("> said\n> by [b] someone"),
+            "[quote][noparse]said\nby [b] someone[/noparse][/quote]"
+        );
+        // A setext heading may span lines, as GitHub shows it.
+        assert_eq!(convert("Two\nlines\n==="), "[h1]Two\nlines[/h1]");
+        // An image's alt text is dropped, line breaks included.
+        assert_eq!(
+            convert("![a\nb](https://example.com/i.png) after"),
+            "[img]https://example.com/i.png[/img] after"
         );
     }
 
@@ -448,7 +498,7 @@ mod tests {
     fn quotes_code_and_rules() {
         assert_eq!(
             convert("> quoted\n> text\n>\n> again\n\n---\n\n```rust\nlet a = [1];\n```"),
-            "[quote]quoted text\n\nagain[/quote]\n\n[hr][/hr]\n\n[code][noparse]let a = [1];[/noparse][/code]"
+            "[quote]quoted\ntext\n\nagain[/quote]\n\n[hr][/hr]\n\n[code][noparse]let a = [1];[/noparse][/code]"
         );
         assert_eq!(
             convert("    indented\n    code\n"),
