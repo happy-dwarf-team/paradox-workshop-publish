@@ -83,7 +83,7 @@ fn eu4_plan_renders_the_description_and_change_note() {
     assert_eq!(
         metadata.description.as_deref(),
         Some(
-            "[h1]Fixture Mod[/h1]\n\nAdds [b]missions[/b] for the [i]Baltic[/i] states.\n\n\
+            "[h1]Fixture Mod[/h1]\nAdds [b]missions[/b] for the [i]Baltic[/i] states.\n\
              [list]\n[*]Works with [url=https://store.steampowered.com/app/236850]EU4 1.37[/url]\n\
              [*]No [strike]achievements[/strike] checksum changes\n[/list]"
         )
@@ -95,7 +95,7 @@ fn eu4_plan_renders_the_description_and_change_note() {
     assert_eq!(
         metadata.change_note.as_deref(),
         Some(
-            "[h3]Bug Fixes[/h3]\n\n[list]\n[*][b]missions:[/b] fix the Riga trigger \
+            "[h3]Bug Fixes[/h3]\n[list]\n[*][b]missions:[/b] fix the Riga trigger \
              ([url=https://github.com/happy-dwarf-team/fixture-mod/commit/abc1234]abc1234[/url])\n\
              [/list]"
         )

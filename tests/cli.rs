@@ -92,7 +92,7 @@ fn plan_prints_text() {
     assert!(
         stdout.contains(
             "  Description:    replaces the Workshop description (docs/description.md, \
-             217 of 8000 bytes)\n    | [h1]Fixture Mod[/h1]\n    |\n"
+             215 of 8000 bytes)\n    | [h1]Fixture Mod[/h1]\n    | Adds [b]missions[/b]"
         ),
         "{stdout}"
     );

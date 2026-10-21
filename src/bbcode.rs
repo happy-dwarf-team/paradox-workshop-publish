@@ -119,6 +119,44 @@ enum Container {
     Table,
 }
 
+/// The kinds of block that decide the space between two blocks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Block {
+    Paragraph,
+    /// A paragraph of nothing but one image, e.g. a divider.
+    Image,
+    Heading,
+    List,
+    Quote,
+    Code,
+    Table,
+    Rule,
+}
+
+/// Whether a blank line goes between two blocks, as the team's
+/// hand-written Workshop pages space them. Steam already gives headings,
+/// lists and images space of their own, so a single newline separates them;
+/// text starts after a blank line, and so does a heading after text.
+fn blank_line(previous: Block, next: Block) -> bool {
+    match (previous, next) {
+        (Block::Heading, _) | (Block::Image, _) | (_, Block::Image) => false,
+        (_, Block::Heading) => true,
+        (Block::List, _) | (_, Block::List) => false,
+        _ => true,
+    }
+}
+
+/// The blocks at one container depth.
+#[derive(Debug, Clone, Copy, Default)]
+struct Level {
+    /// The last block that ended at this depth.
+    previous: Option<Block>,
+    /// Where the current block starts in the output.
+    start: usize,
+    /// The current block follows another, so it may need a blank line.
+    gap: bool,
+}
+
 #[derive(Default)]
 struct Writer {
     out: String,
@@ -126,10 +164,12 @@ struct Writer {
     /// protected by one `[noparse]`.
     text: String,
     containers: Vec<Container>,
+    /// One entry per container depth.
+    levels: Vec<Level>,
     /// A container tag was just written: its first block starts on the same
     /// line, as Steam would show a leading line break.
     fresh: bool,
-    /// A block ended: the next one starts after a blank line.
+    /// A block ended: the next one may start after a blank line.
     after_block: bool,
     /// The text of the code block being read.
     code: Option<String>,
@@ -158,7 +198,7 @@ impl Writer {
             Event::Rule => {
                 self.open_block();
                 self.push("[hr][/hr]");
-                self.close_block();
+                self.close_block(Block::Rule);
             }
             Event::Html(_) | Event::InlineHtml(_) => return Err(Problem::Html),
             Event::FootnoteReference(_) => return Err(Problem::Footnote),
@@ -253,29 +293,29 @@ impl Writer {
 
     fn end(&mut self, tag: TagEnd) {
         match tag {
-            TagEnd::Paragraph => self.close_block(),
+            TagEnd::Paragraph => self.close_block(Block::Paragraph),
             TagEnd::Heading(level) => {
                 self.push(&format!("[/{level}]"));
-                self.close_block();
+                self.close_block(Block::Heading);
             }
             TagEnd::BlockQuote(_) => {
                 self.flush();
                 self.trim_newlines();
                 self.push("[/quote]");
                 self.containers.pop();
-                self.close_block();
+                self.close_block(Block::Quote);
             }
             TagEnd::CodeBlock => {
                 let code = self.code.take().unwrap_or_default();
                 let code = code.strip_suffix('\n').unwrap_or(&code);
                 self.push(&format!("[code]{}[/code]", protect(code)));
-                self.close_block();
+                self.close_block(Block::Code);
             }
             TagEnd::List(ordered) => {
                 self.newline();
                 self.push(if ordered { "[/olist]" } else { "[/list]" });
                 self.containers.pop();
-                self.close_block();
+                self.close_block(Block::List);
             }
             TagEnd::Item => {
                 self.flush();
@@ -287,7 +327,7 @@ impl Writer {
             TagEnd::Table => {
                 self.push("[/table]");
                 self.containers.pop();
-                self.close_block();
+                self.close_block(Block::Table);
             }
             TagEnd::TableHead => {
                 self.push("[/tr]\n");
@@ -344,19 +384,54 @@ impl Writer {
         self.out.truncate(trimmed);
     }
 
+    fn level(&mut self) -> &mut Level {
+        let depth = self.containers.len();
+        if self.levels.len() <= depth {
+            self.levels.resize_with(depth + 1, Level::default);
+        }
+        &mut self.levels[depth]
+    }
+
+    /// Starts a block on a new line. Whether a blank line goes before it is
+    /// decided when it ends, once its kind is known.
     fn open_block(&mut self) {
         if std::mem::take(&mut self.fresh) {
             self.after_block = false;
+            let start = self.out.len();
+            *self.level() = Level {
+                previous: None,
+                start,
+                gap: false,
+            };
             return;
         }
         self.newline();
         let in_item = self.containers.last() == Some(&Container::Item);
-        if std::mem::take(&mut self.after_block) && !in_item {
-            self.out.push('\n');
-        }
+        let gap = std::mem::take(&mut self.after_block) && !in_item;
+        let start = self.out.len();
+        let level = self.level();
+        level.start = start;
+        level.gap = gap;
     }
 
-    fn close_block(&mut self) {
+    fn close_block(&mut self, block: Block) {
+        self.flush();
+        let Level {
+            previous,
+            start,
+            gap,
+        } = *self.level();
+        let block = if block == Block::Paragraph && is_image_only(&self.out[start..]) {
+            Block::Image
+        } else {
+            block
+        };
+        if gap && previous.is_none_or(|previous| blank_line(previous, block)) {
+            self.out.insert(start, '\n');
+        }
+        let level = self.level();
+        level.previous = Some(block);
+        level.gap = false;
         self.newline();
         self.after_block = true;
         self.fresh = false;
@@ -367,6 +442,20 @@ impl Writer {
         self.out.truncate(self.out.trim_end().len());
         self.out
     }
+}
+
+/// One `[img]`, optionally inside a `[url]`, and nothing else.
+fn is_image_only(bbcode: &str) -> bool {
+    let mut rest = bbcode.trim();
+    if let Some(linked) = rest.strip_prefix("[url=")
+        && let Some((_, inner)) = linked.split_once(']')
+        && let Some(inner) = inner.strip_suffix("[/url]")
+    {
+        rest = inner;
+    }
+    rest.strip_prefix("[img]")
+        .and_then(|rest| rest.strip_suffix("[/img]"))
+        .is_some_and(|url| !url.contains('['))
 }
 
 /// Text that Steam would otherwise read as tags goes in `[noparse]`.
@@ -406,7 +495,7 @@ mod tests {
     fn headings_and_paragraphs() {
         assert_eq!(
             convert("# Title\n\nFirst line\nsame paragraph.\n\n## Part\n### Sub\n\nEnd."),
-            "[h1]Title[/h1]\n\nFirst line\nsame paragraph.\n\n[h2]Part[/h2]\n\n[h3]Sub[/h3]\n\nEnd."
+            "[h1]Title[/h1]\nFirst line\nsame paragraph.\n\n[h2]Part[/h2]\n[h3]Sub[/h3]\nEnd."
         );
     }
 
@@ -434,6 +523,33 @@ mod tests {
         assert_eq!(convert("a  \nb\\\nc\nd"), "a\nb\nc\nd");
         // CRLF files give the same result.
         assert_eq!(convert("one\r\ntwo\r\n\r\nthree\r\n"), "one\ntwo\n\nthree");
+    }
+
+    #[test]
+    fn block_spacing_follows_the_team_pages() {
+        // Single newlines after headings and around dividers and lists; a
+        // blank line before a heading that follows text or a list.
+        assert_eq!(
+            convert("Intro\n\n![](https://x.test/i.png)\n\n## Next\nText\n\n- a\n\n### Q\nAnswer"),
+            "Intro\n[img]https://x.test/i.png[/img]\n[h2]Next[/h2]\nText\n[list]\n[*]a\n\
+             [/list]\n\n[h3]Q[/h3]\nAnswer"
+        );
+        // A linked image alone is a divider too; an image inside text is not.
+        assert_eq!(
+            convert(
+                "a\n\n[![](https://x.test/i.png)](https://y.test)\n\nb ![](https://x.test/i.png) c\n\nd"
+            ),
+            "a\n[url=https://y.test][img]https://x.test/i.png[/img][/url]\n\
+             b [img]https://x.test/i.png[/img] c\n\nd"
+        );
+        // Quotes, code and tables keep a blank line around them.
+        assert_eq!(
+            convert("a\n\n> q\n\n```\nc\n```\n\n| h |\n| - |\n| v |\n\nb"),
+            "a\n\n[quote]q[/quote]\n\n[code]c[/code]\n\n[table]\n[tr]\n[th]h[/th]\n[/tr]\n\
+             [tr]\n[td]v[/td]\n[/tr]\n[/table]\n\nb"
+        );
+        assert!(is_image_only("[img]https://x.test/i.png[/img]"));
+        assert!(!is_image_only("[img]a[/img] [img]b[/img]"));
     }
 
     #[test]
@@ -485,7 +601,7 @@ mod tests {
     fn lists() {
         assert_eq!(
             convert("Intro\n\n- one\n- two\n  1. a\n  2. b\n- three\n\nAfter"),
-            "Intro\n\n[list]\n[*]one\n[*]two\n[olist]\n[*]a\n[*]b\n[/olist]\n[*]three\n[/list]\n\nAfter"
+            "Intro\n[list]\n[*]one\n[*]two\n[olist]\n[*]a\n[*]b\n[/olist]\n[*]three\n[/list]\nAfter"
         );
         // A loose list keeps one line per paragraph inside an item.
         assert_eq!(
@@ -532,7 +648,7 @@ mod tests {
                 "<!-- Release notes generated using configuration in .github/release.yml -->\n\n\
                  ## What's Changed\n\n<!--\nmulti-line\n-->\nText <!-- inline --> here\n"
             ),
-            "[h2]What's Changed[/h2]\n\nText  here"
+            "[h2]What's Changed[/h2]\nText  here"
         );
     }
 
@@ -569,7 +685,7 @@ mod tests {
     fn windows_line_endings() {
         assert_eq!(
             convert("# A\r\n\r\n```\r\nx\r\ny\r\n```\r\n"),
-            "[h1]A[/h1]\n\n[code]x\ny[/code]"
+            "[h1]A[/h1]\n[code]x\ny[/code]"
         );
     }
 

@@ -69,10 +69,7 @@ mod tests {
     #[test]
     fn markdown_is_converted() {
         let (_dir, file) = write("d.md", "\u{feff}# Title\n\n**Bold**\n");
-        assert_eq!(
-            load(&file, "d.md").unwrap(),
-            "[h1]Title[/h1]\n\n[b]Bold[/b]"
-        );
+        assert_eq!(load(&file, "d.md").unwrap(), "[h1]Title[/h1]\n[b]Bold[/b]");
     }
 
     #[test]
