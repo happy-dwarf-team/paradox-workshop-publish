@@ -1,5 +1,9 @@
 # paradox-workshop-publish
 
+[![ci](https://github.com/happy-dwarf-team/paradox-workshop-publish/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/happy-dwarf-team/paradox-workshop-publish/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/happy-dwarf-team/paradox-workshop-publish)](https://github.com/happy-dwarf-team/paradox-workshop-publish/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/happy-dwarf-team/paradox-workshop-publish)](LICENSE)
+
 Publish Paradox Interactive game mods to the Steam Workshop from GitHub Actions or from your own computer. `pdx-ws` reads the game's own mod descriptor (`descriptor.mod` or `.metadata/metadata.json`) instead of a hand-written upload file. It also:
 
 - uploads a cleaned copy of the mod, without `.git`, workflows or local descriptor paths;
