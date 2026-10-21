@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.1...v0.1.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* keep line breaks inside Markdown paragraphs in the BBCode ([#42](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/42)) ([284615c](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/284615c092a220b085c22dba75e70073e3d94530))
+
 ## [0.1.1](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.0...v0.1.1) (2026-10-20)
 
 
