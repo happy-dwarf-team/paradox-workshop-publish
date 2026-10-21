@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.3...v0.2.0) (2026-10-21)
+
+
+### Features
+
+* turn release-please notes into player-friendly change notes ([#47](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/47)) ([04021e5](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/04021e54a9064ad69946128bc5cf544c8280ca8a))
+
 ## [0.1.3](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.2...v0.1.3) (2026-10-21)
 
 
