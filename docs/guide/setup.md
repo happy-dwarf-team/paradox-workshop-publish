@@ -76,7 +76,7 @@ When stdout is a terminal, `pdx-ws` refuses to print the session there unless yo
 
 Run it on Windows or Linux; steamcmd mode does not support macOS.
 
-The `gh secret set … --env steam-workshop` commands need the environment to exist; create it first (next step).
+The `gh secret set … --env steam-workshop` commands need the environment to exist; create it first (next step). To share one session between several repositories, see [Several repositories in one organization](#several-repositories-in-one-organization).
 
 When a session stops working, `publish` exits with code 3 and names `pdx-ws session export`. Run it again to replace the secret. How long a session lasts is still being measured ([#22](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/22)).
 
@@ -97,6 +97,17 @@ gh api --method PUT repos/OWNER/REPO/environments/steam-workshop
 ```
 
 Then add reviewers and tag rules in the web interface.
+
+### Several repositories in one organization
+
+One Steam session can publish every Workshop item of its account, so an organization that publishes from several repositories can keep it once, as **organization secrets** shared with selected repositories, and renew it in one place when it expires:
+
+```sh
+pdx-ws session export --user my_steam_name | gh secret set STEAM_SESSION --org ORG --visibility selected --repos repo-a,repo-b
+gh secret set STEAM_USERNAME --org ORG --visibility selected --repos repo-a,repo-b --body my_steam_name
+```
+
+Keep the `steam-workshop` environment in each repository, without its own secrets: its reviewers and tag rules still gate every publish job. An environment secret of the same name would take precedence over the organization's, so delete those. The trade-off: an organization secret reaches every workflow of the selected repositories, not only the jobs of the environment, so anyone who can push a workflow there can read the session. Choose it only when the people with write access are the people you would trust with the session; pull requests from forks and Dependabot get no secrets either way.
 
 ## 6. Add the workflows
 

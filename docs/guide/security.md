@@ -37,7 +37,7 @@ Both also sign you out of Steam everywhere else. Afterwards, create a new sessio
 
 ## Keeping it safe
 
-- **Keep the session and user name as environment secrets**, in a `steam-workshop` environment, not as repository secrets. Only jobs that name the environment can read them.
+- **Keep the session and user name as environment secrets**, in a `steam-workshop` environment, not as repository secrets. Only jobs that name the environment can read them. An organization that publishes from several repositories can share them as organization secrets limited to those repositories instead; every workflow there can then read them, so do it only when everyone with write access may hold the session ([setup](setup.md#several-repositories-in-one-organization)).
 - **Publish only from tags or releases.** Limit the environment's deployment branches and tags to your release tags (e.g. `v*`, or `main` for the release-please setup), so a pushed branch cannot use the secrets. Add **required reviewers**, so a person approves each publish.
 - **Never run the action on `pull_request_target`.** It refuses to, because that event runs code from a pull request with the repository's secrets. Use `pull_request` for previews; those runs are always dry runs and need no secrets.
 - **Renew the session when collaborators change.** Anyone who could change the workflows, or approve the environment, could have used it. When someone leaves:
