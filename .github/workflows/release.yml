@@ -192,3 +192,32 @@ jobs:
         env:
           ITEM_ID: ${{ steps.dry-run.outputs.item-id }}
         run: test "$ITEM_ID" = 2948217283
+
+  # From 1.0, the floating major tag (v1, v2, …) follows the newest release, so
+  # `uses: happy-dwarf-team/paradox-workshop-publish@v1` gets every 1.x
+  # release. The action resolves v1 to the newest v1.x.y release of pdx-ws
+  # itself. 0.x releases move no tag.
+  major-tag:
+    needs: [release-please, verify-release]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Move the major tag
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          major="${TAG#v}"
+          major="${major%%.*}"
+          if [ "$major" -lt 1 ]; then
+            echo "$TAG is a 0.x release; no floating tag"
+            exit 0
+          fi
+          git tag -f "v$major" "$TAG^{commit}"
+          git push -f origin "refs/tags/v$major"
+          echo "v$major now points to $TAG"

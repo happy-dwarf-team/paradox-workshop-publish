@@ -8,6 +8,14 @@
       "package-name": "pdx-ws",
       "initial-version": "0.1.0",
       "bump-minor-pre-major": true,
+      "extra-files": [
+        { "type": "generic", "path": "README.md" },
+        { "type": "generic", "path": "docs/guide/github-action.md" },
+        { "type": "generic", "path": "docs/guide/self-hosted-client-mode.md" },
+        { "type": "generic", "path": "docs/examples/preview-pull-request.yml" },
+        { "type": "generic", "path": "docs/examples/publish-on-release.yml" },
+        { "type": "generic", "path": "docs/examples/release-please-monorepo.yml" }
+      ],
       "changelog-sections": [
         { "type": "feat", "section": "Features" },
         { "type": "fix", "section": "Bug Fixes" },
