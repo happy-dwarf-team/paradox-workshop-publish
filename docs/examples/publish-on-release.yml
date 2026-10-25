@@ -31,7 +31,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0
+      - uses: happy-dwarf-team/paradox-workshop-publish@v0.2.0 # x-release-please-version
         id: workshop
         with:
           steam-username: ${{ secrets.STEAM_USERNAME }}

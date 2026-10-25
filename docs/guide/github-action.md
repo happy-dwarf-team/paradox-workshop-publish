@@ -1,9 +1,9 @@
 # The GitHub Action
 
-The action downloads the `pdx-ws` release of its own tag and checks its build attestation (or, without `gh`, its SHA-256). Pin a release such as `@v0.1.0`; from 1.0 there is also a floating `@v1` tag.
+The action downloads the `pdx-ws` release of its own tag and checks its build attestation (or, without `gh`, its SHA-256). Pin a release such as <!-- x-release-please-start-version -->`@v0.2.0`<!-- x-release-please-end -->; from 1.0 there is also a floating `@v1` tag.
 
 ```yaml
-- uses: happy-dwarf-team/paradox-workshop-publish@v0.1.0
+- uses: happy-dwarf-team/paradox-workshop-publish@v0.2.0 # x-release-please-version
   with:
     steam-username: ${{ secrets.STEAM_USERNAME }}
     steam-session: ${{ secrets.STEAM_SESSION }}
