@@ -104,3 +104,7 @@ cargo test --workspace --locked
 The `action` workflow runs the GitHub Action from the checkout as a dry run on fixture mods; it sends nothing to Steam.
 
 Release archives are configured for [cargo-dist](https://axodotdev.github.io/cargo-dist/) in `dist-workspace.toml` (`dist plan` lists them); nothing is published yet. Versions and the changelog are managed by release-please from [Conventional Commits](https://www.conventionalcommits.org/) in pull request titles.
+
+## License
+
+MIT, see [LICENSE](LICENSE). paradox-workshop-publish is an unofficial community project, not affiliated with or endorsed by Paradox Interactive.
