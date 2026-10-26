@@ -95,7 +95,7 @@ fn eu4_plan_renders_the_description_and_change_note() {
     assert_eq!(
         metadata.change_note.as_deref(),
         Some(
-            "[b]Version 1.4.2[/b]\n[b]Fixes[/b]\n[list]\n[*][b]missions:[/b] Fix the Riga trigger\n[/list]"
+            "[b]Version 1.4.2[/b]\n[b]Fixes[/b]\n• [b]missions:[/b] Fix the Riga trigger"
         )
     );
     assert_eq!(
