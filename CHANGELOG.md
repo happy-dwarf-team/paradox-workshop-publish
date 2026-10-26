@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.0...v0.2.1) (2026-10-26)
+
+
+### Bug Fixes
+
+* keep change-note lists inside Steam's note box ([#55](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/55)) ([837d3f1](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/837d3f1bc2dc05b1127e73157c32b8cdb86f0bb9))
+
 ## [0.2.0](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.1.3...v0.2.0) (2026-10-21)
 
 

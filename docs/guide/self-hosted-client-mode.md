@@ -31,7 +31,7 @@ Most modders do not need this: create the item with `pdx-ws init` on your own co
          - uses: actions/checkout@v7
            with:
              persist-credentials: false
-         - uses: happy-dwarf-team/paradox-workshop-publish@v0.2.0 # x-release-please-version
+         - uses: happy-dwarf-team/paradox-workshop-publish@v0.2.1 # x-release-please-version
            with:
              mode: client
              change-note: ${{ github.event.release.body }}
