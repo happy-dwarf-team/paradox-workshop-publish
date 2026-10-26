@@ -162,6 +162,18 @@ jobs:
         working-directory: dist
         run: gh release upload "$TAG" pdx-ws-* SHA256SUMS.txt --clobber
 
+  # Rebuilds happydwarf.dev once the archives are attached, so the hub shows the
+  # new version.
+  notify-website:
+    needs: [release-please, publish]
+    if: needs.release-please.outputs.release_created == 'true'
+    uses: ./.github/workflows/website.yml
+    permissions: {}
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+    secrets:
+      WEBSITE_DISPATCH_TOKEN: ${{ secrets.WEBSITE_DISPATCH_TOKEN }}
+
   # The action as users run it: download the new release for the runner,
   # verify its attestation, and plan the fixture mods as a dry run.
   verify-release:
