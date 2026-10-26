@@ -77,7 +77,9 @@ Change notes are read by players, so the explicit note and the changelog section
 | `### Features` / `### Bug Fixes` / `### Performance Improvements` | **New** / **Fixes** / **Faster**; other headings become bold lines with their own name |
 | `* publish the mod ([#32](…)) ([e7280ef](…))` | • Publish the mod (no pull request, issue or commit links; the first letter is capitalised, after a `**scope:**` if there is one) |
 
-A changelog section, whose version heading is not part of it, gets **Version x.y.z** as its first line. A hand-written note without headings, references or lowercase list items passes through unchanged; ordinary links stay.
+A changelog section, whose version heading is not part of it, gets **Version x.y.z** as its first line. A hand-written note without headings, lists or references passes through unchanged; ordinary links stay.
+
+**Lists become plain lines.** Each item starts with `• ` (`1. `, `2. `, … in a numbered list), and text after a list gets a blank line. Steam puts the whole change note in one paragraph with a background, and a `[list]` cannot sit inside a paragraph: the items would fall outside the note's box and leave an empty box below it. Descriptions keep `[list]`, because Steam shows them without that paragraph.
 
 ### When Steam keeps the old version
 

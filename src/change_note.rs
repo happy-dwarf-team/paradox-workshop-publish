@@ -4,8 +4,8 @@
 //!
 //! Change notes are for players, so release-please's developer format is
 //! polished after conversion ([`for_players`]): its version heading becomes
-//! `Version x.y.z`, section headings become bold lines, and links to pull
-//! requests, issues and commits are dropped.
+//! `Version x.y.z`, section headings become bold lines, links to pull
+//! requests, issues and commits are dropped, and lists become plain lines.
 
 use std::path::Path;
 
@@ -145,27 +145,57 @@ fn note(bbcode: String, source: ChangeNoteSource) -> Result<ChangeNote, PlanErro
 /// becomes `Version 1.2.0`, and the commit-type sections are renamed
 /// (Features → New, Bug Fixes → Fixes, Performance → Faster). Links whose text
 /// is a pull request or issue number (`#12`) or a commit hash are dropped with
-/// the parentheses around them, and list items start with a capital letter.
+/// the parentheses around them. List items start with a capital letter and
+/// become lines starting with `• ` (`1. ` in an ordered list), because Steam
+/// puts a change note in one paragraph and a `[list]` breaks out of it: the
+/// items lose the note's background and leave an empty box below it.
 /// `version`: put `Version <version>` first when the note does not name one,
 /// as for a changelog section, whose heading is not part of it.
 /// `[code]` blocks are left as they are.
 pub fn for_players(bbcode: &str, version: Option<&str>) -> String {
     let mut lines = Vec::new();
     let mut in_code = false;
+    // The open lists, innermost last: `None` for bullets, else the next number.
+    let mut lists: Vec<Option<u32>> = Vec::new();
+    // Text right after a list gets a blank line, so it does not read as an item.
+    let mut after_list = false;
     for line in bbcode.split('\n') {
         if in_code {
             in_code = !line.contains("[/code]");
             lines.push(line.to_owned());
             continue;
         }
+        if line == "[/list]" || line == "[/olist]" {
+            lists.pop();
+            after_list = lists.is_empty();
+            continue;
+        }
+        if std::mem::take(&mut after_list) && !line.is_empty() {
+            lines.push(String::new());
+        }
         if line.contains("[code]") && !line.contains("[/code]") {
             in_code = true;
             lines.push(line.to_owned());
             continue;
         }
-        let line = heading(line).unwrap_or_else(|| line.to_owned());
-        let line = drop_reference_links(&line);
-        lines.push(capitalize_item(&line));
+        match line {
+            "[list]" => lists.push(None),
+            "[olist]" => lists.push(Some(1)),
+            _ => {
+                let line = heading(line).unwrap_or_else(|| line.to_owned());
+                let line = capitalize_item(&drop_reference_links(&line));
+                lines.push(match line.strip_prefix("[*]") {
+                    Some(item) => match lists.last_mut() {
+                        Some(Some(number)) => {
+                            *number += 1;
+                            format!("{}. {item}", *number - 1)
+                        }
+                        _ => format!("• {item}"),
+                    },
+                    None => line,
+                });
+            }
+        }
     }
     let mut text = lines.join("\n");
     if let Some(version) = version
@@ -460,7 +490,7 @@ mod tests {
             .unwrap();
         assert_eq!(
             note.bbcode,
-            "[b]Version 1.3.0[/b]\n[b]New[/b]\n[list]\n[*][b]missions:[/b] Add the Baltic tree\n[/list]"
+            "[b]Version 1.3.0[/b]\n[b]New[/b]\n• [b]missions:[/b] Add the Baltic tree"
         );
         assert_eq!(
             note.source,
@@ -574,8 +604,30 @@ mod tests {
         let note = resolve_with(&input, None, Some("0.9.0")).unwrap().unwrap();
         assert_eq!(
             note.bbcode,
-            "[b]Version 0.9.0[/b]\n[b]New[/b]\n[list]\n[*]Publish Bellows as a Steam Workshop mod\n[/list]"
+            "[b]Version 0.9.0[/b]\n[b]New[/b]\n• Publish Bellows as a Steam Workshop mod"
         );
+    }
+
+    #[test]
+    fn lists_become_lines_that_stay_in_the_paragraph() {
+        let body = "## [0.10.0](https://github.com/o/bellows/compare/v0.9.0...v0.10.0) (2026-10-26)\n\n\n\
+                    ### Features\n\n\
+                    * report Bellows' fields to Anvil's start-up benchmark ([#51](https://github.com/o/bellows/issues/51))\n\n\n\
+                    ### Build\n\n\
+                    * take the Anvil SDK from the 1.4.0 release ([#49](https://github.com/o/bellows/issues/49))\n";
+        let polished = for_players(&bbcode::to_bbcode(body).unwrap(), None);
+        assert_eq!(
+            polished,
+            "[b]Version 0.10.0[/b]\n[b]New[/b]\n• Report Bellows' fields to Anvil's start-up benchmark\n\n\
+             [b]Build[/b]\n• Take the Anvil SDK from the 1.4.0 release"
+        );
+
+        let nested = "Intro\n[list]\n[*]one\n[*]two\n[olist]\n[*]a\n[*]b\n[/olist]\n\
+                      [*]three\n[/list]\nAfter";
+        let expected = "Intro\n• One\n• Two\n1. A\n2. B\n• Three\n\nAfter";
+        assert_eq!(for_players(nested, None), expected);
+        let continued = "[olist]\n[*]first\nmore\n[*]second\n[/olist]";
+        assert_eq!(for_players(continued, None), "1. First\nmore\n2. Second");
     }
 
     #[test]
@@ -585,19 +637,19 @@ mod tests {
                         ### Performance Improvements\n\n* load faster\n\n### Reverts\n\n* undo it\n";
         let polished = for_players(&bbcode::to_bbcode(markdown).unwrap(), None);
         assert!(
-            polished.starts_with("[b]Version 1.4.0[/b]\n[b]New[/b]\n[list]\n[*]Add ideas\n[/list]"),
+            polished.starts_with("[b]Version 1.4.0[/b]\n[b]New[/b]\n• Add ideas\n\n[b]Fixes[/b]"),
             "{polished}"
         );
         assert!(
-            polished.contains("[b]Fixes[/b]\n[list]\n[*][b]ui:[/b] Fix the ledger\n[/list]"),
+            polished.contains("[b]Fixes[/b]\n• [b]ui:[/b] Fix the ledger\n\n[b]Faster[/b]"),
             "{polished}"
         );
         assert!(
-            polished.contains("[b]Faster[/b]\n[list]\n[*]Load faster\n[/list]"),
+            polished.contains("[b]Faster[/b]\n• Load faster\n\n[b]Reverts[/b]"),
             "{polished}"
         );
-        assert!(polished.contains("[b]Reverts[/b]"), "{polished}");
         assert!(!polished.contains("[h"), "{polished}");
+        assert!(!polished.contains("[list]"), "{polished}");
     }
 
     #[test]
