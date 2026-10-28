@@ -45,6 +45,7 @@ Some constructs are handled specially:
   In Markdown, keep the usual blank lines between blocks; the converter decides the spacing on Steam.
 - **Text with `[`** goes in `[noparse]`, so Steam does not read it as a tag.
 - **HTML comments** (`<!-- … -->`) are dropped.
+- **Straight double quotes** (`"`) become typographic ones in `steamcmd` mode: `"Start-up only"` reaches Steam as `“Start-up only”`, also in code blocks, `.bbcode` files and the title. steamcmd reads the description and change note from a file that has no way to write a `"` inside a value. `client` mode sends them unchanged. In link and image URLs `"` becomes `%22` in both modes.
 
 Anything Steam cannot show is an error that names the file and line, so you find out before the release, not after:
 

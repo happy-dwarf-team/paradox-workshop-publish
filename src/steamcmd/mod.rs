@@ -130,6 +130,10 @@ pub enum Error {
     },
     #[error(transparent)]
     Copy(#[from] CopyError),
+    /// steamcmd's VDF cannot hold a `"` in a value, and a path cannot be
+    /// changed the way text is.
+    #[error("steamcmd cannot read the path {} because it contains `\"`", .0.display())]
+    QuoteInPath(PathBuf),
 }
 
 impl Error {
@@ -313,7 +317,7 @@ impl Steamcmd {
         };
         // Outside the published copy, so it is never uploaded.
         let vdf_path = self.root.path().join("item.vdf");
-        fs::write(&vdf_path, item_vdf.render()).map_err(io_error("cannot write the VDF"))?;
+        fs::write(&vdf_path, item_vdf.render()?).map_err(io_error("cannot write the VDF"))?;
         self.clear_logs(plan.app_id);
 
         let user = credentials.user();
