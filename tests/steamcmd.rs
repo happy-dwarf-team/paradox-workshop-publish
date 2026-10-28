@@ -20,6 +20,7 @@ use pdx_ws::plan::{ModPlan, Plan};
 use pdx_ws::publish::{self, Outcome as ModOutcome, Report};
 use pdx_ws::steamcmd::install::EXECUTABLE;
 use pdx_ws::steamcmd::session::{self, Credentials};
+use pdx_ws::steamcmd::vdf;
 use pdx_ws::steamcmd::{Error, PublishOptions, Published, Steamcmd};
 
 const USER: &str = "pdx-ws-test-user";
@@ -323,10 +324,6 @@ fn publish(steamcmd: &Steamcmd, plan: &ModPlan, options: &PublishOptions) -> Out
     Outcome { result, log }
 }
 
-fn vdf_escape(value: &str) -> String {
-    value.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
 fn assert_masked(log: &[String]) {
     for line in log {
         assert!(!line.contains("12345678"), "SteamID not masked: {line}");
@@ -377,7 +374,7 @@ fn updates_an_item_and_cleans_up() {
         "\t\"publishedfileid\" \"2948217283\"",
         "\t\"title\" \"Fixture Mod\"",
         "\t\"visibility\" \"0\"",
-        "\t\"changenote\" \"Fixed the \\\"Fixture\\\" event\"",
+        "\t\"changenote\" \"Fixed the “Fixture” event\"",
     ] {
         assert!(vdf.lines().any(|l| l == line), "{line} missing in\n{vdf}");
     }
@@ -388,7 +385,7 @@ fn updates_an_item_and_cleans_up() {
         Some(description) => assert!(
             vdf.contains(&format!(
                 "\t\"description\" \"{}\"\n",
-                vdf_escape(description)
+                vdf::text(description)
             )),
             "{vdf}"
         ),

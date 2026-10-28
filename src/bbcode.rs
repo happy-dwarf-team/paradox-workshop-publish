@@ -467,11 +467,13 @@ fn protect(text: &str) -> Cow<'_, str> {
     }
 }
 
-/// A URL that cannot end a `[url=…]` or `[img]` tag early.
+/// A URL that cannot end a `[url=…]` or `[img]` tag early, and has no `"`
+/// for steamcmd's VDF to replace.
 fn url(url: &str) -> String {
     url.replace(']', "%5D")
         .replace('[', "%5B")
         .replace(' ', "%20")
+        .replace('"', "%22")
 }
 
 fn is_absolute(url: &str) -> bool {
@@ -594,6 +596,10 @@ mod tests {
         assert_eq!(
             convert("[![Logo](HTTP://example.com/l.png)](https://example.com)"),
             "[url=https://example.com][img]HTTP://example.com/l.png[/img][/url]"
+        );
+        assert_eq!(
+            convert(r#"[a "b"](<https://example.com/?q="b">)"#),
+            r#"[url=https://example.com/?q=%22b%22]a "b"[/url]"#
         );
     }
 
