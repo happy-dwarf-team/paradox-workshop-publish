@@ -58,7 +58,7 @@ jobs:
 
       # No change-note input: each mod's change note comes from its own
       # changelog section for its new version.
-      - uses: happy-dwarf-team/paradox-workshop-publish@v0.2.1 # x-release-please-version
+      - uses: happy-dwarf-team/paradox-workshop-publish@v0.2.2 # x-release-please-version
         with:
           mod: ${{ steps.released.outputs.ids }}
           steam-username: ${{ secrets.STEAM_USERNAME }}

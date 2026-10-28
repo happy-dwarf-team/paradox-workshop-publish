@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.1...v0.2.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* write values steamcmd can read back into the item VDF ([#58](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/58)) ([cf46121](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/cf46121f52becd6fbb3ba1e00f407eb1a7c36623))
+
 ## [0.2.1](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.0...v0.2.1) (2026-10-26)
 
 
