@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.2...v0.2.3) (2026-11-02)
+
+
+### Build
+
+* bump the cargo group with 4 updates ([#64](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/64)) ([199d407](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/199d407caef722e0e0e6d7dc294ae9f14697ad60))
+
 ## [0.2.2](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.1...v0.2.2) (2026-10-28)
 
 
