@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/happy-dwarf-team/paradox-workshop-publish/security/advisories/new
+    about: Report privately; see SECURITY.md.
+  - name: User guide
+    url: https://github.com/happy-dwarf-team/paradox-workshop-publish/blob/main/docs/guide/README.md
+    about: Setup, workshop.toml, the GitHub Action, client mode and several mods.
+  - name: Security notes for the Steam session
+    url: https://github.com/happy-dwarf-team/paradox-workshop-publish/blob/main/docs/guide/security.md
+    about: What a saved Steam session can do, and how to revoke it.

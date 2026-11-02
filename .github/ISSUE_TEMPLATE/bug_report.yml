@@ -1,0 +1,76 @@
+name: Bug report
+description: pdx-ws or the action fails, publishes the wrong thing, or plans something you did not expect.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through [private reporting](https://github.com/happy-dwarf-team/paradox-workshop-publish/security/advisories/new), not public issues.
+
+        **Never paste your Steam session** (`STEAM_SESSION`, `PDX_WS_STEAM_SESSION`). pdx-ws does not print it, but check every log and file below for it, for your Steam user name and SteamID, and for paths with your Windows user name.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: pdx-ws version
+      description: "`pdx-ws --version`, or the action tag in your workflow (e.g. `@v0.2.3`)."
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options:
+        - steamcmd
+        - client
+        - Not publishing (plan, init or session export)
+    validations:
+      required: true
+  - type: dropdown
+    id: runner
+    attributes:
+      label: Where it ran
+      options:
+        - GitHub-hosted runner (Linux)
+        - GitHub-hosted runner (Windows)
+        - GitHub-hosted runner (macOS)
+        - Self-hosted runner
+        - Locally (CLI on my PC)
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game
+      description: The `game` in `workshop.toml`, e.g. `eu4`, `hoi4`, `stellaris`, `vic3`.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The command or the workflow step you ran.
+      placeholder: |
+        1. pdx-ws plan --mod my_mod
+        2. pdx-ws publish --mod my_mod
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: workshop.toml and the descriptor
+      description: Your `workshop.toml` and the mod's `descriptor.mod` (or `.metadata/metadata.json`).
+      render: toml
+  - type: textarea
+    id: plan
+    attributes:
+      label: Plan and log
+      description: The output of `pdx-ws plan` for the mod, and the failing run's log (the action's step or the CLI). Remove anything you do not want to share first.
+      render: text
