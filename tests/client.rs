@@ -8,7 +8,8 @@ use std::path::{Path, PathBuf};
 
 use pdx_ws::change_note::ChangeNoteInput;
 use pdx_ws::client::{
-    self, Created, Error, Event, ItemUpdate, LEGAL_AGREEMENT_URL, Submitted, Workshop, drift,
+    self, Created, Error, Event, ItemUpdate, LEGAL_AGREEMENT_URL, LocalizedUpdate, Submitted,
+    Workshop, drift,
 };
 use pdx_ws::config::{Config, Visibility};
 use pdx_ws::item_id::ItemId;
@@ -29,9 +30,13 @@ struct FakeWorkshop {
     next_id: u64,
     needs_agreement: bool,
     fail_submit: bool,
+    fail_localized: bool,
     install_dir: Option<PathBuf>,
     created: RefCell<Vec<u32>>,
     submissions: RefCell<Vec<Submission>>,
+    /// The localized updates, each with the number of main updates before
+    /// it.
+    localized: RefCell<Vec<(usize, ItemId, LocalizedUpdate)>>,
 }
 
 impl Workshop for FakeWorkshop {
@@ -70,6 +75,25 @@ impl Workshop for FakeWorkshop {
         Ok(Submitted {
             needs_agreement: false,
         })
+    }
+
+    fn submit_localized(
+        &mut self,
+        _app_id: u32,
+        item: ItemId,
+        update: &LocalizedUpdate,
+    ) -> Result<(), Error> {
+        if self.fail_localized {
+            return Err(Error::Steam {
+                action: "set a localized title and description",
+                reason: format!("k_EResultFail ({})", update.language),
+            });
+        }
+        let after = self.submissions.borrow().len();
+        self.localized
+            .borrow_mut()
+            .push((after, item, update.clone()));
+        Ok(())
     }
 
     fn install_dir(&self, _app_id: u32) -> Option<PathBuf> {
@@ -345,4 +369,155 @@ fn the_checksum_cross_check_reads_the_installed_manifest() {
     // Games without checksum rules are not checked.
     let (_, vic3) = load(&fixture("vic3"));
     assert!(drift::cross_check(&workshop, &vic3).is_empty());
+}
+
+#[test]
+fn publish_sends_each_language_after_the_main_update() {
+    let (_, plan) = load(&fixture("localized"));
+    let mut workshop = FakeWorkshop::default();
+    let mut events = Vec::new();
+    client::publish(&mut workshop, &plan, &mut |event| {
+        events.push(event.to_string())
+    })
+    .unwrap();
+
+    let submissions = workshop.submissions.borrow();
+    assert_eq!(submissions.len(), 1);
+    // The main update stays in English.
+    assert_eq!(submissions[0].update.title, "Unicode Fixture");
+    assert_eq!(
+        submissions[0].update.description.as_deref(),
+        Some("A fixture with [b]localized[/b] texts.")
+    );
+
+    let english = Some("A fixture with [b]localized[/b] texts.".to_owned());
+    let localized = workshop.localized.borrow();
+    let item = id(3_900_000_042);
+    assert_eq!(
+        *localized,
+        [
+            (
+                1,
+                item,
+                LocalizedUpdate {
+                    language: "japanese".to_owned(),
+                    title: "ユニコードパッチ".to_owned(),
+                    description: english.clone(),
+                }
+            ),
+            (
+                1,
+                item,
+                LocalizedUpdate {
+                    language: "koreana".to_owned(),
+                    title: "Unicode Fixture".to_owned(),
+                    description: Some("[b]한국어[/b] 설명\n".to_owned()),
+                }
+            ),
+            (
+                1,
+                item,
+                LocalizedUpdate {
+                    language: "schinese".to_owned(),
+                    title: "统一码补丁".to_owned(),
+                    description: Some("[h1]简介[/h1]\n支持[b]中文[/b]文本。".to_owned()),
+                }
+            ),
+        ]
+    );
+    assert!(
+        events
+            .iter()
+            .any(|event| event == "setting the schinese title and description"),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn a_language_without_a_description_keeps_it_when_description_is_unset() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("workshop.toml"),
+        "schema = 1\n[[mod]]\ngame = \"eu4\"\ntitles = { tchinese = \"統一碼補丁\" }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.path().join("descriptor.mod"),
+        "name=\"A\"\nremote_file_id=\"5\"\n",
+    )
+    .unwrap();
+    let (_, plan) = load(dir.path());
+    assert_eq!(
+        client::localized_updates(&plan),
+        [LocalizedUpdate {
+            language: "tchinese".to_owned(),
+            title: "統一碼補丁".to_owned(),
+            description: None,
+        }]
+    );
+    let mut workshop = FakeWorkshop::default();
+    let mut events = Vec::new();
+    client::publish(&mut workshop, &plan, &mut |event| {
+        events.push(event.to_string())
+    })
+    .unwrap();
+    assert!(
+        events.contains(&"setting the tchinese title".to_owned()),
+        "{events:?}"
+    );
+}
+
+#[test]
+fn a_failed_localized_update_fails_the_publish() {
+    let (_, plan) = load(&fixture("localized"));
+    let mut workshop = FakeWorkshop {
+        fail_localized: true,
+        ..FakeWorkshop::default()
+    };
+    let error = client::publish(&mut workshop, &plan, &mut |_| {}).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "Steam could not set a localized title and description: k_EResultFail (japanese)"
+    );
+    assert_eq!(error.exit_code(), 1);
+    // The main update went through first.
+    assert_eq!(workshop.submissions.borrow().len(), 1);
+}
+
+#[test]
+fn init_sends_the_localized_texts_too() {
+    let repo = scratch("localized");
+    let descriptor = repo.path().join("descriptor.mod");
+    let text = fs::read_to_string(&descriptor).unwrap();
+    fs::write(
+        &descriptor,
+        text.replace("remote_file_id=\"3900000042\"\n", ""),
+    )
+    .unwrap();
+    let (config, plan) = load(repo.path());
+    let mut workshop = FakeWorkshop {
+        next_id: 3_900_000_043,
+        ..FakeWorkshop::default()
+    };
+    client::init(
+        &mut workshop,
+        &config,
+        &plan,
+        &ChangeNoteInput::default(),
+        &mut |_| {},
+    )
+    .unwrap();
+    let localized = workshop.localized.borrow();
+    let languages: Vec<_> = localized
+        .iter()
+        .map(|(after, item, update)| (*after, item.get(), update.language.as_str()))
+        .collect();
+    assert_eq!(
+        languages,
+        [
+            (1, 3_900_000_043, "japanese"),
+            (1, 3_900_000_043, "koreana"),
+            (1, 3_900_000_043, "schinese")
+        ]
+    );
 }

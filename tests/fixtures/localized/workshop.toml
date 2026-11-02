@@ -1,0 +1,7 @@
+schema = 1
+
+[[mod]]
+game = "eu4"
+exclude = ["workshop/**"]
+description = "workshop/description.md"
+titles = { schinese = "统一码补丁", japanese = "ユニコードパッチ" }

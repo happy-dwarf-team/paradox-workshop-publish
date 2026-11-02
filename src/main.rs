@@ -247,9 +247,14 @@ fn plan(args: &PlanArgs) -> Result<(), Failure> {
 fn publish(args: &PublishArgs) -> Result<(), Failure> {
     let config = Config::load(&args.selection.config)?;
     let change_note = ChangeNoteInput::from_env(args.change_note.clone());
-    let plan = Plan::build_with(&config, &args.selection.mods, &change_note)?;
+    let mut plan = Plan::build_with(&config, &args.selection.mods, &change_note)?;
     if args.mode == Mode::Client {
         return publish_client(args, &plan);
+    }
+    for module in &mut plan.mods {
+        if let Some(warning) = steamcmd::localized_warning(module) {
+            module.warnings.push(warning);
+        }
     }
 
     // Everything that can be checked before installing anything.

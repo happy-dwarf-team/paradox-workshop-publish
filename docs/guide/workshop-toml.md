@@ -5,7 +5,7 @@
 ```toml
 schema = 1
 
-[defaults]                       # optional; any [[mod]] key except id, path and item_id
+[defaults]                       # optional; any [[mod]] key except id, path, item_id and titles
 game = "eu4"
 checksum = "warn"
 
@@ -16,6 +16,7 @@ path = "."                       # default "."
 visibility = "private"           # unset: publishing never changes the visibility
 exclude = ["docs/**"]            # globs, added to the defaults and the built-in excludes
 description = "workshop/description.md"   # .md (converted) or .bbcode (sent as it is)
+titles = { schinese = "我的模组" }   # titles in other Steam languages; client mode only
 changelog = "CHANGELOG.md"
 checksum = "warn"                # "warn" | "keep" | "ignore"; EU4 only in v1
 # item_id = 123                  # Victoria 3 and EU5 only
@@ -34,6 +35,7 @@ Keys are strict: an unknown key or a missing `schema` is an error, so a typo can
 | `visibility` | unset | `public`, `friends`, `private` or `unlisted`. Unset, publishing never changes the item's visibility. `pdx-ws init` uses `private` when it is unset. |
 | `exclude` | `[]` | Globs of files to leave out of the published copy, relative to the mod root. `*` stays within one folder and `**` crosses folders; `docs/**` leaves out the whole `docs` folder. Lists in `[defaults]` and `[[mod]]` are combined. |
 | `description` | unset | A `.md` file (converted to BBCode) or a `.bbcode` file (sent as it is). Unset, the Workshop description is never touched. With it, **every publish replaces the description.** See [Description and change notes](description-and-change-notes.md). |
+| `titles` | unset | Titles in other languages, keyed by Steam API language code: `titles = { schinese = "…", japanese = "…" }`. Set in `client` mode only. An unknown code, `english` or an empty title is an error. See [Other languages](description-and-change-notes.md#other-languages). |
 | `changelog` | unset | A Markdown changelog. The section for the descriptor's `version` becomes the change note. |
 | `checksum` | `"warn"` | What happens when an EU4 mod changes the game's checksum. See [The checksum warning](checksum.md). |
 | `item_id` | unset | The Workshop item ID, for games whose descriptor is `.metadata/metadata.json` (Victoria 3, EU5). For `descriptor.mod` games it is an error: the ID belongs in `remote_file_id`. |
@@ -42,7 +44,7 @@ A value in `[[mod]]` overrides the same key in `[defaults]`, except `exclude`, w
 
 ## What comes from the descriptor
 
-There are no metadata overrides in `workshop.toml`; the descriptor is the single source.
+There are no metadata overrides in `workshop.toml`; the descriptor is the single source. Titles and descriptions in other languages add to it and replace nothing: see [Other languages](description-and-change-notes.md#other-languages).
 
 | Workshop field | `descriptor.mod` games (EU4, HoI4, Stellaris, Imperator, CK3) | `metadata.json` games (Victoria 3, EU5) |
 | --- | --- | --- |

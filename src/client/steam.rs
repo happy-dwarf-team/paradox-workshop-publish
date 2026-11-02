@@ -11,7 +11,7 @@ use steamworks::{
     UpdateStatus,
 };
 
-use super::{Created, Error, Event, ItemUpdate, Stage, Submitted, Workshop};
+use super::{Created, Error, Event, ItemUpdate, LocalizedUpdate, Stage, Submitted, Workshop};
 use crate::config::Visibility;
 use crate::game::Game;
 use crate::item_id::ItemId;
@@ -26,6 +26,8 @@ pub const STEAM_API: &str = "libsteam_api.so";
 
 /// How long `CreateItem` may take.
 const CREATE_TIMEOUT: Duration = Duration::from_secs(2 * 60);
+/// How long one localized update may take.
+const LOCALIZED_TIMEOUT: Duration = Duration::from_secs(2 * 60);
 /// How long one upload may take.
 const SUBMIT_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 /// How often progress is reported at most.
@@ -219,6 +221,34 @@ impl Workshop for SteamClient {
             reason: error.to_string(),
         })?;
         Ok(Submitted { needs_agreement })
+    }
+
+    fn submit_localized(
+        &mut self,
+        app_id: u32,
+        item: ItemId,
+        update: &LocalizedUpdate,
+    ) -> Result<(), Error> {
+        let mut handle = self
+            .client
+            .ugc()
+            .start_item_update(AppId(app_id), PublishedFileId(item.get()))
+            .language(&update.language)
+            .title(&update.title);
+        if let Some(description) = &update.description {
+            handle = handle.description(description);
+        }
+        let (sender, receiver) = mpsc::channel();
+        let _watch = handle.submit(None, move |result| {
+            let _ = sender.send(result);
+        });
+        let action = "set a localized title and description";
+        self.wait(action, &receiver, LOCALIZED_TIMEOUT, || {})?
+            .map_err(|error| Error::Steam {
+                action,
+                reason: format!("{} ({})", error, update.language),
+            })?;
+        Ok(())
     }
 
     fn install_dir(&self, app_id: u32) -> Option<PathBuf> {

@@ -8,6 +8,7 @@ Publish Paradox Interactive game mods to the Steam Workshop from GitHub Actions 
 
 - uploads a cleaned copy of the mod, without `.git`, workflows or local descriptor paths;
 - converts a Markdown description and change note to Steam BBCode;
+- sets titles and descriptions in other Steam languages, such as Chinese, Japanese or Korean, from files next to the English description;
 - warns before a release that would cost EU4 players their achievements.
 
 Supported games: Europa Universalis IV, Hearts of Iron IV, Stellaris, Imperator: Rome, Crusader Kings III, Victoria 3 and Europa Universalis V.
@@ -16,7 +17,7 @@ Supported games: Europa Universalis IV, Hearts of Iron IV, Stellaris, Imperator:
 
 ## Two modes
 
-| Mode | How it reaches Steam | Where it runs | Sets tags |
+| Mode | How it reaches Steam | Where it runs | Sets tags and other languages |
 | --- | --- | --- | --- |
 | `steamcmd` | steamcmd with a saved *Steam session* | GitHub-hosted runners, any CI | No |
 | `client` | the Steam client you are logged in to | your computer, a self-hosted runner | Yes |

@@ -291,3 +291,48 @@ fn missing_command_is_a_usage_error() {
     let output = pdx_ws(&[]);
     assert_eq!(output.status.code(), Some(2));
 }
+
+#[test]
+fn plan_lists_the_localized_texts() {
+    let output = pdx_ws(&["plan", "--config", &fixture_config("localized")]);
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains(
+            "  Localized:      japanese, koreana, schinese (client mode only)\n    \
+             japanese:     title ユニコードパッチ\n                  description in English\n    \
+             koreana:      title in English\n                  description from \
+             workshop/description.koreana.bbcode (24 of 8000 bytes)\n    | [b]한국어[/b] 설명\n    \
+             schinese:     title 统一码补丁\n                  description from \
+             workshop/description.schinese.md (44 of 8000 bytes)\n    | [h1]简介[/h1]\n    | \
+             支持[b]中文[/b]文本。\n"
+        ),
+        "{stdout}"
+    );
+
+    let output = pdx_ws(&["plan", "--config", &fixture_config("localized"), "--json"]);
+    let plan: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let localized = &plan["mods"][0]["metadata"]["localized"];
+    assert_eq!(localized[2]["language"], "schinese");
+    assert_eq!(
+        localized[2]["description_source"],
+        "workshop/description.schinese.md"
+    );
+    assert_eq!(localized[1]["title"], serde_json::Value::Null);
+}
+
+#[test]
+fn steamcmd_publish_warns_that_it_leaves_the_localized_texts_out() {
+    let output = pdx_ws(&["publish", "--config", &fixture_config("localized")]);
+    // No credentials, so it stops before installing steamcmd.
+    assert_eq!(output.status.code(), Some(3));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "warning: the mod at `.`: steamcmd mode cannot set the localized titles and \
+             descriptions (japanese, koreana, schinese), so Steam keeps the ones it has; send \
+             them with `pdx-ws publish --mode client`"
+        ),
+        "{stderr}"
+    );
+}

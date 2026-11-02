@@ -1,6 +1,7 @@
 //! The publish plan: everything one publish will do, computed from the
 //! repository before anything is sent to Steam (spec sections 2, 5, 6, 7 and 8).
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -82,6 +83,25 @@ pub struct WorkshopMetadata {
     /// The change note in BBCode; `None` when nothing gives one.
     pub change_note: Option<String>,
     pub change_note_source: Option<ChangeNoteSource>,
+    /// Titles and descriptions in other Steam languages, by language code;
+    /// applied in `client` mode only (ADR 0003).
+    pub localized: Vec<LocalizedText>,
+}
+
+/// The title and description in one Steam language other than English.
+/// What it leaves out is sent in English, so the language has both.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LocalizedText {
+    /// The Steam API language code, e.g. `schinese`.
+    pub language: String,
+    /// From `titles`; `None` sends the descriptor's name.
+    pub title: Option<String>,
+    /// The localized description in BBCode; `None` sends the English one,
+    /// when there is one.
+    pub description: Option<String>,
+    /// The localized description file, relative to the folder of
+    /// `workshop.toml`.
+    pub description_source: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -193,12 +213,25 @@ pub enum PlanError {
     TextNotUtf8 { what: &'static str, path: String },
     #[error("{path}, {source}")]
     Markdown { path: String, source: ConvertError },
+    #[error("{path}: {reason}")]
+    DescriptionLanguage { path: String, reason: String },
+    #[error("{first} and {second} are both the {language} description; keep one")]
+    DuplicateLanguage {
+        language: String,
+        first: String,
+        second: String,
+    },
     #[error("--change-note, {source}")]
     ChangeNoteOption { source: ConvertError },
     #[error(
         "the {what} is {size} bytes after conversion to BBCode; Steam takes at most {TEXT_LIMIT}"
     )]
     TextTooLong { what: &'static str, size: usize },
+    #[error(
+        "the description {path} is {size} bytes after conversion to BBCode; Steam takes at most \
+         {TEXT_LIMIT}"
+    )]
+    LocalizedTooLong { path: String, size: usize },
     #[error("changelog {path} is configured but the descriptor has no `version`")]
     NoVersion { path: String },
     #[error(
@@ -382,6 +415,7 @@ impl ModPlan {
             .zip(description_source.as_deref())
             .map(|(file, path)| description::load(&config.base_dir.join(file), path))
             .transpose()?;
+        let localized = localized(config, &module.config)?;
         let changelog_file = module
             .config
             .changelog
@@ -417,6 +451,7 @@ impl ModPlan {
                 description_source,
                 change_note: change_note.as_ref().map(|note| note.bbcode.clone()),
                 change_note_source: change_note.map(|note| note.source),
+                localized,
             },
             files,
             excluded: selection.excluded,
@@ -433,6 +468,47 @@ impl ModPlan {
             None => format!("the mod at `{}`", self.path),
         }
     }
+}
+
+/// The localized texts of a mod: its `titles` and the localized files next
+/// to its `description`, by language.
+fn localized(config: &Config, module: &ModConfig) -> Result<Vec<LocalizedText>, PlanError> {
+    let mut texts: BTreeMap<String, LocalizedText> = module
+        .titles
+        .iter()
+        .map(|(language, title)| {
+            let text = LocalizedText {
+                language: language.clone(),
+                title: Some(title.clone()),
+                description: None,
+                description_source: None,
+            };
+            (language.clone(), text)
+        })
+        .collect();
+    if let Some(file) = &module.description {
+        for found in description::localized_files(&config.base_dir.join(file), &relative(file))? {
+            let bbcode =
+                description::load(&found.file, &found.path).map_err(|error| match error {
+                    PlanError::TextTooLong { size, .. } => PlanError::LocalizedTooLong {
+                        path: found.path.clone(),
+                        size,
+                    },
+                    error => error,
+                })?;
+            let text = texts
+                .entry(found.language.clone())
+                .or_insert_with(|| LocalizedText {
+                    language: found.language.clone(),
+                    title: None,
+                    description: None,
+                    description_source: None,
+                });
+            text.description = Some(bbcode);
+            text.description_source = Some(found.path);
+        }
+    }
+    Ok(texts.into_values().collect())
 }
 
 /// The checksum check of the published copy (spec section 8).
@@ -642,6 +718,38 @@ impl fmt::Display for ModPlan {
                 indented(f, note)?;
             }
             (None, _) => writeln!(f, "  Change note:    none (the descriptor has no version)")?,
+        }
+        if !metadata.localized.is_empty() {
+            let languages: Vec<&str> = metadata
+                .localized
+                .iter()
+                .map(|text| text.language.as_str())
+                .collect();
+            writeln!(
+                f,
+                "  Localized:      {} (client mode only)",
+                languages.join(", ")
+            )?;
+            for text in &metadata.localized {
+                let label = format!("{}:", text.language);
+                match &text.title {
+                    Some(title) => writeln!(f, "    {label:<14}title {title}")?,
+                    None => writeln!(f, "    {label:<14}title in English")?,
+                }
+                match (&text.description, &metadata.description) {
+                    (Some(description), _) => {
+                        writeln!(
+                            f,
+                            "                  description from {} ({} of {TEXT_LIMIT} bytes)",
+                            text.description_source.as_deref().unwrap_or("?"),
+                            description.len()
+                        )?;
+                        indented(f, description)?;
+                    }
+                    (None, Some(_)) => writeln!(f, "                  description in English")?,
+                    (None, None) => writeln!(f, "                  description unchanged")?,
+                }
+            }
         }
         let game = checksum::rules(self.game).map_or(profile.name, |rules| rules.name.as_str());
         match &self.checksum {
