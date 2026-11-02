@@ -54,6 +54,28 @@ Anything Steam cannot show is an error that names the file and line, so you find
 - `####` and deeper headings;
 - images with a relative path. Steam cannot show files from your repository, so upload the image somewhere and link its `https://` URL.
 
+## Other languages
+
+Steam keeps a title and a description per language and shows each player the one in their Steam client's language, else the English one. The descriptor's `name` and the `description` file are the English texts. Others go next to them:
+
+- **Descriptions:** a file named like `description`, with a Steam language code before the extension. Beside `workshop/description.md`, the file `workshop/description.schinese.md` is the Simplified Chinese description, and `workshop/description.japanese.bbcode` the Japanese one. Each is converted and limited to 8000 bytes like the English description (a Chinese, Japanese or Korean character takes 3 bytes). Without `description`, no such file is read.
+- **Titles:** the `titles` table of the mod in `workshop.toml`:
+
+  ```toml
+  [[mod]]
+  game = "eu4"
+  description = "workshop/description.md"
+  titles = { schinese = "统一码补丁", tchinese = "統一碼補丁" }
+  ```
+
+A language with only a title gets the English description, and one with only a description gets the English title, so no language is left with an empty field.
+
+The codes are Steam's API language codes: `schinese` (Simplified Chinese), `tchinese` (Traditional Chinese), `japanese`, `koreana` (Korean), `brazilian` (Portuguese, Brazil), `latam` (Spanish, Latin America), `spanish`, `french`, `german`, `polish`, `russian` and the rest of [Steam's supported languages](https://partner.steamgames.com/doc/store/localization/languages). An unknown code is an error that names the file, with a hint for common mistakes such as `chinese` or `korean`. So is `english`, which the descriptor and `description` already give, and so are two files for one language. `pdx-ws plan` lists each language with its title and the BBCode of its description.
+
+**Only `client` mode sends other languages.** steamcmd has no way to name the language of a title or description, so `steamcmd` mode publishes the English texts, leaves the other languages as they are on Steam, and warns. Send them with `pdx-ws publish --mode client` on your computer, or with `pdx-ws init` when you create the item. A release in CI does not undo them: the English update leaves the other languages alone. Publish in `client` mode again when you change a localized file or title.
+
+Steam keeps a language's last text when you delete its file or title. To retire a language, change its text before you delete the file, for example to the English one.
+
 ## The change note
 
 Each publish attaches a change note, shown on the item's *Change Notes* page. `pdx-ws` takes the first of:

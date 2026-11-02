@@ -5,7 +5,7 @@
 1. [First-time setup](setup.md): install `pdx-ws`, create the Workshop item, save a Steam session, create the `steam-workshop` environment.
 2. [`workshop.toml` reference](workshop-toml.md): every key, and what each game needs.
 3. [The GitHub Action](github-action.md): inputs, outputs, dry runs, the job summary.
-4. [Description and change notes](description-and-change-notes.md): Markdown to BBCode, changelogs and the release body.
+4. [Description and change notes](description-and-change-notes.md): Markdown to BBCode, other languages, changelogs and the release body.
 5. [The checksum warning](checksum.md): when an EU4 mod costs players their achievements.
 6. [Several mods in one repository](several-mods.md): `id`, `[defaults]`, release-please monorepo tags.
 7. [Security](security.md): what the Steam session can do, how to revoke it, and how to keep it safe.

@@ -340,3 +340,125 @@ fn tag_limits_are_warnings() {
         "the descriptor has 6 tags; the Victoria 3 launcher allows at most 5"
     );
 }
+
+#[test]
+fn localized_texts_come_from_titles_and_files_next_to_the_description() {
+    let plan = plan_one("localized");
+    let metadata = &plan.metadata;
+    let localized: Vec<_> = metadata
+        .localized
+        .iter()
+        .map(|text| {
+            (
+                text.language.as_str(),
+                text.title.as_deref(),
+                text.description.as_deref(),
+                text.description_source.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        localized,
+        [
+            ("japanese", Some("ユニコードパッチ"), None, None),
+            (
+                "koreana",
+                None,
+                Some("[b]한국어[/b] 설명\n"),
+                Some("workshop/description.koreana.bbcode")
+            ),
+            (
+                "schinese",
+                Some("统一码补丁"),
+                Some("[h1]简介[/h1]\n支持[b]中文[/b]文本。"),
+                Some("workshop/description.schinese.md")
+            ),
+        ]
+    );
+    // The localized files are not part of the published copy.
+    assert_eq!(paths(&plan), ["README.txt", "descriptor.mod"]);
+    assert!(codes(&plan).iter().all(|code| *code == "no-preview"));
+}
+
+#[test]
+fn localized_files_need_a_steam_language_and_one_file_each() {
+    let toml = "schema = 1\n[[mod]]\ngame = \"eu4\"\ndescription = \"workshop/about.md\"\n";
+    let base: &[(&str, &[u8])] = &[
+        ("descriptor.mod", b"name=\"A\"\n"),
+        ("workshop/about.md", b"About\n"),
+    ];
+    let with = |extra: &[(&str, &[u8])]| {
+        let files: Vec<(&str, &[u8])> = base.iter().chain(extra).copied().collect();
+        scratch(toml, &files)
+    };
+
+    let dir = with(&[("workshop/about.chinese.md", b"x\n")]);
+    let error = plan_dir(dir.path(), &[]).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "the mod at `.`: workshop/about.chinese.md: `chinese` is not a Steam API language \
+         code; use `schinese`; see https://partner.steamgames.com/doc/store/localization/languages"
+    );
+    assert_eq!(error.exit_code(), 2);
+
+    let dir = with(&[("workshop/about.english.bbcode", b"x\n")]);
+    assert!(matches!(
+        plan_error(dir.path()),
+        PlanError::DescriptionLanguage { path, .. } if path == "workshop/about.english.bbcode"
+    ));
+
+    let dir = with(&[
+        ("workshop/about.japanese.md", b"x\n"),
+        ("workshop/about.japanese.bbcode", b"x\n"),
+    ]);
+    assert_eq!(
+        plan_error(dir.path()).to_string(),
+        "workshop/about.japanese.bbcode and workshop/about.japanese.md are both the japanese \
+         description; keep one"
+    );
+
+    // Other names next to the description are not localized files.
+    let dir = with(&[
+        ("workshop/about.japanese.txt", b"x\n"),
+        ("workshop/notes.japanese.md", b"x\n"),
+        ("workshop/about.md.orig", b"x\n"),
+    ]);
+    assert!(plan_one_in(dir.path()).metadata.localized.is_empty());
+}
+
+#[test]
+fn localized_descriptions_are_converted_and_limited_like_the_description() {
+    let toml = "schema = 1\n[[mod]]\ngame = \"eu4\"\ndescription = \"about.md\"\n";
+    let long = format!("**{}**", "汉".repeat(2665));
+    let dir = scratch(
+        toml,
+        &[
+            ("descriptor.mod", b"name=\"A\"\n"),
+            ("about.md", b"About\n"),
+            ("about.schinese.md", long.as_bytes()),
+        ],
+    );
+    assert_eq!(
+        plan_error(dir.path()).to_string(),
+        "the description about.schinese.md is 8002 bytes after conversion to BBCode; Steam \
+         takes at most 8000"
+    );
+
+    fs::write(dir.path().join("about.schinese.md"), "<b>x</b>\n").unwrap();
+    assert_eq!(
+        plan_error(dir.path()).to_string(),
+        "about.schinese.md, line 1: raw HTML is not supported; use Markdown only"
+    );
+
+    // Without `description` no localized file is read.
+    fs::write(
+        dir.path().join("workshop.toml"),
+        "schema = 1\n[[mod]]\ngame = \"eu4\"\n",
+    )
+    .unwrap();
+    assert!(plan_one_in(dir.path()).metadata.localized.is_empty());
+}
+
+fn plan_one_in(dir: &Path) -> ModPlan {
+    plan_dir(dir, &[]).unwrap().mods.remove(0)
+}

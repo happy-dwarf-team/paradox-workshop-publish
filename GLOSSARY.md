@@ -36,6 +36,10 @@ _Avoid_: staging folder, build output
 A modder's cached steamcmd login, created once interactively and stored as a CI secret, which lets `steamcmd` mode log in without a password or Steam Guard code.
 _Avoid_: config.vdf, sentry file, token, credentials
 
+**Localized text**:
+A Workshop item's title and description in one Steam language other than English, which Steam shows to players whose Steam client uses that language; `client` mode sets them.
+_Avoid_: translation (for the Steam field), locale
+
 **Change note**:
 The text attached to one publish, shown on the Workshop item's Change Notes page.
 _Avoid_: changelog (the file in the repository), release notes (a GitHub Release), patch notes

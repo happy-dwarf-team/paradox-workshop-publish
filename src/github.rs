@@ -48,6 +48,17 @@ pub struct MetadataView {
     pub description: Option<String>,
     pub description_source: Option<String>,
     pub change_note: Option<String>,
+    /// Missing in plans of pdx-ws before 0.3.0.
+    #[serde(default)]
+    pub localized: Vec<LocalizedView>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct LocalizedView {
+    pub language: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub description_source: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -289,8 +300,54 @@ pub fn summary(plan: &PlanView, results: Option<&ResultsView>, run: &Run) -> Str
                 let _ = writeln!(out, "- Change note: none");
             }
         }
+        localized(&mut out, metadata);
     }
     out
+}
+
+/// The localized texts: one line, the localized titles, and a block per
+/// localized description.
+fn localized(out: &mut String, metadata: &MetadataView) {
+    if metadata.localized.is_empty() {
+        return;
+    }
+    let languages: Vec<&str> = metadata
+        .localized
+        .iter()
+        .map(|text| text.language.as_str())
+        .collect();
+    let _ = writeln!(
+        out,
+        "- Localized texts: {} (applied in client mode only)",
+        text(&languages.join(", "))
+    );
+    for localized in &metadata.localized {
+        if let Some(title) = &localized.title {
+            let _ = writeln!(
+                out,
+                "  - {} title: {}",
+                text(&localized.language),
+                text(title)
+            );
+        }
+    }
+    for localized in &metadata.localized {
+        if let Some(description) = &localized.description {
+            let source = localized
+                .description_source
+                .as_deref()
+                .map(|source| format!(" from {}", text(source)))
+                .unwrap_or_default();
+            details_block(
+                out,
+                &format!(
+                    "Description in {} (BBCode{source})",
+                    text(&localized.language)
+                ),
+                description,
+            );
+        }
+    }
 }
 
 fn item_link(module: &ModView, result: Option<&ResultView>) -> String {
@@ -584,6 +641,43 @@ mod tests {
             config: "repo/workshop.toml".to_owned(),
             ..Run::default()
         }
+    }
+
+    #[test]
+    fn the_summary_lists_the_localized_texts() {
+        // A plan of pdx-ws 0.2 has no `localized`.
+        assert!(!summary(&plan(), None, &run()).contains("Localized"));
+
+        let mut plan = plan();
+        plan.mods[0].metadata.localized = vec![
+            LocalizedView {
+                language: "japanese".to_owned(),
+                title: Some("アルファ".to_owned()),
+                description: None,
+                description_source: None,
+            },
+            LocalizedView {
+                language: "schinese".to_owned(),
+                title: None,
+                description: Some("[b]中文[/b]".to_owned()),
+                description_source: Some("docs/a.schinese.md".to_owned()),
+            },
+        ];
+        let summary = summary(&plan, None, &run());
+        assert!(
+            summary.contains(
+                "- Localized texts: japanese, schinese (applied in client mode only)\n  - \
+                 japanese title: アルファ\n"
+            ),
+            "{summary}"
+        );
+        assert!(
+            summary.contains(
+                "<details><summary>Description in schinese (BBCode from docs/a.schinese.md)\
+                 </summary>\n\n```text\n[b]中文[/b]\n```"
+            ),
+            "{summary}"
+        );
     }
 
     #[test]

@@ -16,6 +16,7 @@ pub mod error;
 pub mod game;
 pub mod github;
 pub mod item_id;
+pub mod language;
 pub mod metadata;
 pub mod mods;
 pub mod plan;

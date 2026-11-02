@@ -47,7 +47,7 @@ Run it after `actions/checkout`, in a job that names the `steam-workshop` enviro
    - The user name and session reach `pdx-ws` only through the environment variables `PDX_WS_STEAM_USERNAME` and `PDX_WS_STEAM_SESSION`, never on the command line.
    - A failed mod does not stop the others.
 5. **Reports.**
-   - **Job summary:** a table of the mods with their items and results. For each mod: the tags, the visibility, the warnings, the checksum matches, the rendered description and change note, and steamcmd's error lines on failure.
+   - **Job summary:** a table of the mods with their items and results. For each mod: the tags, the visibility, the warnings, the checksum matches, the rendered description and change note, the localized titles and descriptions, and steamcmd's error lines on failure.
    - **Annotations:** warnings on the run. A checksum change is annotated on the matching files and on the descriptor for `replace_path`.
 6. **Cleans up.**
    - `pdx-ws` deletes the session after each steamcmd run and the steamcmd folder when it exits.

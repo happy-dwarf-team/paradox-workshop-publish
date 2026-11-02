@@ -1,6 +1,6 @@
 //! `client` mode: publishing through the logged-in Steam client with
 //! `ISteamUGC` (spec section 10, ADR 0002). It is the only mode that sets
-//! tags, and `init` creates items with it.
+//! tags and localized texts (ADR 0003), and `init` creates items with it.
 //!
 //! The Steam calls sit behind the [`Workshop`] trait: [`steam::SteamClient`]
 //! is the real one, and the tests use a fake, because CI has no Steam client.
@@ -43,6 +43,15 @@ pub trait Workshop {
         events: &mut dyn FnMut(Event),
     ) -> Result<Submitted, Error>;
 
+    /// `StartItemUpdate`, `SetItemUpdateLanguage`, the title and the
+    /// description, and `SubmitItemUpdate` without a change note.
+    fn submit_localized(
+        &mut self,
+        app_id: u32,
+        item: ItemId,
+        update: &LocalizedUpdate,
+    ) -> Result<(), Error>;
+
     /// The game's install folder, when it is installed.
     fn install_dir(&self, app_id: u32) -> Option<PathBuf>;
 }
@@ -73,6 +82,16 @@ pub struct ItemUpdate {
     /// Set verbatim, also when empty: the descriptor is the only source.
     pub tags: Vec<String>,
     pub change_note: Option<String>,
+}
+
+/// What one localized update sets: the title and, when there is one, the
+/// description in one Steam language.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalizedUpdate {
+    /// The Steam API language code.
+    pub language: String,
+    pub title: String,
+    pub description: Option<String>,
 }
 
 /// A `GetItemUpdateProgress` stage.
@@ -233,7 +252,48 @@ pub fn item_update(plan: &ModPlan, content: &Path, creating: bool) -> Result<Ite
     })
 }
 
-/// Updates the mod's existing item, tags included.
+/// One update per localized text, after the main one. A language without
+/// its own title or description gets the English one, so Steam never keeps
+/// an empty field for it.
+pub fn localized_updates(plan: &ModPlan) -> Vec<LocalizedUpdate> {
+    let metadata = &plan.metadata;
+    metadata
+        .localized
+        .iter()
+        .map(|text| LocalizedUpdate {
+            language: text.language.clone(),
+            title: text.title.clone().unwrap_or_else(|| metadata.title.clone()),
+            description: text
+                .description
+                .clone()
+                .or_else(|| metadata.description.clone()),
+        })
+        .collect()
+}
+
+/// Sends the plan's localized texts, one language after another.
+fn submit_localized(
+    workshop: &mut dyn Workshop,
+    plan: &ModPlan,
+    item_id: ItemId,
+    events: &mut dyn FnMut(Event),
+) -> Result<(), Error> {
+    for update in localized_updates(plan) {
+        events(Event::Notice(format!(
+            "setting the {} title{}",
+            update.language,
+            if update.description.is_some() {
+                " and description"
+            } else {
+                ""
+            }
+        )));
+        workshop.submit_localized(plan.app_id, item_id, &update)?;
+    }
+    Ok(())
+}
+
+/// Updates the mod's existing item, tags and localized texts included.
 pub fn publish(
     workshop: &mut dyn Workshop,
     plan: &ModPlan,
@@ -243,6 +303,7 @@ pub fn publish(
     let copy = PublishedCopy::create(plan)?;
     let update = item_update(plan, copy.path(), false)?;
     let submitted = workshop.submit_update(plan.app_id, item_id, &update, events)?;
+    submit_localized(workshop, plan, item_id, events)?;
     if submitted.needs_agreement {
         events(Event::Notice(agreement_notice()));
     }
@@ -254,8 +315,8 @@ pub fn publish(
 }
 
 /// Creates the mod's item, writes its ID back into the repository, and
-/// uploads the published copy with title, tags, preview, visibility and
-/// description. The ID is written back right after `CreateItem`, so a
+/// uploads the published copy with title, tags, preview, visibility,
+/// description and localized texts. The ID is written back right after `CreateItem`, so a
 /// failed upload does not lose it.
 pub fn init(
     workshop: &mut dyn Workshop,
@@ -287,6 +348,7 @@ pub fn init(
         let copy = PublishedCopy::create(&plan)?;
         let update = item_update(&plan, copy.path(), true)?;
         let submitted = workshop.submit_update(plan.app_id, item_id, &update, events)?;
+        submit_localized(workshop, &plan, item_id, events)?;
         Ok(submitted.needs_agreement)
     };
     let submitted_needs_agreement = upload().map_err(|source| Error::AfterCreate {

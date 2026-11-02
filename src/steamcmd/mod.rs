@@ -23,7 +23,7 @@ use tempfile::TempDir;
 use crate::copy::CopyError;
 use crate::exit;
 use crate::item_id::ItemId;
-use crate::plan::ModPlan;
+use crate::plan::{ModPlan, Warning};
 use install::InstallError;
 use output::Signal;
 use session::{Credentials, SessionError};
@@ -61,6 +61,30 @@ impl Root {
             Root::Kept(dir) => dir,
         }
     }
+}
+
+/// The warning code of [`localized_warning`].
+pub const LOCALIZED_CLIENT_ONLY: &str = "localized-client-only";
+
+/// steamcmd cannot set localized texts (ADR 0003), so a plan with some
+/// gets a warning that names them and the mode that sends them.
+pub fn localized_warning(module: &ModPlan) -> Option<Warning> {
+    let localized = &module.metadata.localized;
+    if localized.is_empty() {
+        return None;
+    }
+    let languages: Vec<&str> = localized
+        .iter()
+        .map(|text| text.language.as_str())
+        .collect();
+    Some(Warning {
+        code: LOCALIZED_CLIENT_ONLY,
+        message: format!(
+            "steamcmd mode cannot set the localized titles and descriptions ({}), so Steam \
+             keeps the ones it has; send them with `pdx-ws publish --mode client`",
+            languages.join(", ")
+        ),
+    })
 }
 
 /// Options of one publish.

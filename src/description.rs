@@ -2,9 +2,10 @@
 //! section 7).
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::bbcode;
+use crate::language;
 use crate::plan::PlanError;
 
 /// Steam's limit for a description and a change note, in bytes of UTF-8
@@ -26,6 +27,85 @@ pub fn load(file: &Path, path: &str) -> Result<String, PlanError> {
     };
     check_limit("description", &bbcode)?;
     Ok(bbcode)
+}
+
+/// A localized description file next to the `description` file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocalizedFile {
+    /// The Steam API language code from the file name.
+    pub language: String,
+    pub file: PathBuf,
+    /// As `path` of [`localized_files`] shows it, with `/` separators.
+    pub path: String,
+}
+
+/// The files `<stem>.<language>.md` and `<stem>.<language>.bbcode` next to
+/// the description file `file` (shown as `path`), by language (spec section
+/// 7). A language that is not a Steam API code, `english`, and two files
+/// for one language are errors.
+pub fn localized_files(file: &Path, path: &str) -> Result<Vec<LocalizedFile>, PlanError> {
+    let Some(stem) = file.file_stem().and_then(|stem| stem.to_str()) else {
+        return Ok(Vec::new());
+    };
+    let dir = match file.parent() {
+        Some(parent) if !parent.as_os_str().is_empty() => parent,
+        _ => Path::new("."),
+    };
+    let folder = match path.rfind('/') {
+        Some(end) => &path[..=end],
+        None => "",
+    };
+    let entries = fs::read_dir(dir).map_err(|source| PlanError::Walk {
+        path: dir.to_owned(),
+        source,
+    })?;
+    let mut found: Vec<LocalizedFile> = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|source| PlanError::Walk {
+            path: dir.to_owned(),
+            source,
+        })?;
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else { continue };
+        let Some(language) = name
+            .strip_prefix(stem)
+            .and_then(|rest| rest.strip_prefix('.'))
+            .and_then(|rest| {
+                rest.strip_suffix(".md")
+                    .or_else(|| rest.strip_suffix(".bbcode"))
+            })
+            .filter(|language| !language.is_empty() && !language.contains('.'))
+        else {
+            continue;
+        };
+        if !entry.file_type().is_ok_and(|kind| kind.is_file()) {
+            continue;
+        }
+        let shown = format!("{folder}{name}");
+        if let Some(reason) = language::check(language) {
+            return Err(PlanError::DescriptionLanguage {
+                path: shown,
+                reason,
+            });
+        }
+        if let Some(first) = found.iter().find(|other| other.language == language) {
+            let mut paths = [first.path.clone(), shown];
+            paths.sort();
+            let [first, second] = paths;
+            return Err(PlanError::DuplicateLanguage {
+                language: language.to_owned(),
+                first,
+                second,
+            });
+        }
+        found.push(LocalizedFile {
+            language: language.to_owned(),
+            file: entry.path(),
+            path: shown,
+        });
+    }
+    found.sort_by(|a, b| a.language.cmp(&b.language));
+    Ok(found)
 }
 
 /// A UTF-8 text file without its BOM.

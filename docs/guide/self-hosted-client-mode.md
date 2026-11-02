@@ -1,6 +1,6 @@
 # Self-hosted runner for `client` mode
 
-`client` mode publishes through a running, logged-in Steam client. Unlike `steamcmd` mode, it can set **tags** and run the installed-game checksum cross-check. GitHub-hosted runners have no Steam client, so `client` mode in CI needs a runner of your own.
+`client` mode publishes through a running, logged-in Steam client. Unlike `steamcmd` mode, it can set **tags** and **titles and descriptions in other languages**, and run the installed-game checksum cross-check. GitHub-hosted runners have no Steam client, so `client` mode in CI needs a runner of your own.
 
 Most modders do not need this: create the item with `pdx-ws init` on your own computer once, and publish releases from hosted runners in `steamcmd` mode. Set this up only if CI must set tags.
 

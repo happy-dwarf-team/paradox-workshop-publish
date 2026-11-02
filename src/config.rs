@@ -1,6 +1,6 @@
 //! `workshop.toml`: which mods a repository publishes and how (spec section 4).
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::Error;
 use crate::game::Game;
 use crate::item_id::ItemId;
+use crate::language;
 
 /// The only `schema` this version of `pdx-ws` reads.
 pub const SCHEMA: i64 = 1;
@@ -39,6 +40,8 @@ pub struct ModConfig {
     /// The defaults' globs followed by the mod's own.
     pub exclude: Vec<String>,
     pub description: Option<PathBuf>,
+    /// Localized titles by Steam API language code (ADR 0003).
+    pub titles: BTreeMap<String, String>,
     pub changelog: Option<PathBuf>,
     pub checksum: ChecksumSetting,
     pub item_id: Option<ItemId>,
@@ -114,6 +117,14 @@ pub enum ConfigError {
     AbsolutePath { label: String, path: String },
     #[error("{label}: `description` must be a .md or .bbcode file, not `{path}`")]
     DescriptionType { label: String, path: String },
+    #[error("{label}: `titles.{code}`: {reason}")]
+    TitleLanguage {
+        label: String,
+        code: String,
+        reason: String,
+    },
+    #[error("{label}: `titles.{code}` is empty")]
+    EmptyTitle { label: String, code: String },
 }
 
 #[derive(Deserialize)]
@@ -126,7 +137,7 @@ struct RawConfig {
     mods: Vec<RawMod>,
 }
 
-/// Any `[[mod]]` key except `id`, `path` and `item_id`.
+/// Any `[[mod]]` key except `id`, `path`, `item_id` and `titles`.
 #[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RawDefaults {
@@ -147,6 +158,7 @@ struct RawMod {
     visibility: Option<Visibility>,
     exclude: Option<Vec<String>>,
     description: Option<PathBuf>,
+    titles: Option<BTreeMap<String, String>>,
     changelog: Option<PathBuf>,
     checksum: Option<ChecksumSetting>,
     item_id: Option<ItemId>,
@@ -239,6 +251,22 @@ fn apply_defaults(defaults: &RawDefaults, raw: RawMod) -> Result<ModConfig, Conf
             });
         }
     }
+    let titles = raw.titles.unwrap_or_default();
+    for (code, title) in &titles {
+        if let Some(reason) = language::check(code) {
+            return Err(ConfigError::TitleLanguage {
+                label,
+                code: code.clone(),
+                reason,
+            });
+        }
+        if title.trim().is_empty() {
+            return Err(ConfigError::EmptyTitle {
+                label,
+                code: code.clone(),
+            });
+        }
+    }
     let exclude = defaults
         .exclude
         .iter()
@@ -253,6 +281,7 @@ fn apply_defaults(defaults: &RawDefaults, raw: RawMod) -> Result<ModConfig, Conf
         visibility: raw.visibility.or(defaults.visibility),
         exclude,
         description,
+        titles,
         changelog: raw.changelog.or_else(|| defaults.changelog.clone()),
         checksum: raw.checksum.or(defaults.checksum).unwrap_or_default(),
         item_id: raw.item_id,
@@ -294,6 +323,7 @@ mod tests {
                 visibility: None,
                 exclude: vec![],
                 description: None,
+                titles: BTreeMap::new(),
                 changelog: None,
                 checksum: ChecksumSetting::Warn,
                 item_id: None,
@@ -313,6 +343,7 @@ mod tests {
             visibility = "unlisted"
             exclude = ["docs/**"]
             description = "workshop/description.bbcode"
+            titles = { schinese = "我的模组", koreana = "내 모드" }
             changelog = "CHANGELOG.md"
             checksum = "keep"
             item_id = 3123456789
@@ -328,6 +359,13 @@ mod tests {
         assert_eq!(
             module.description,
             Some(PathBuf::from("workshop/description.bbcode"))
+        );
+        assert_eq!(
+            module.titles,
+            BTreeMap::from([
+                ("koreana".to_owned(), "내 모드".to_owned()),
+                ("schinese".to_owned(), "我的模组".to_owned()),
+            ])
         );
         assert_eq!(module.changelog, Some(PathBuf::from("CHANGELOG.md")));
         assert_eq!(module.checksum, ChecksumSetting::Keep);
@@ -388,6 +426,7 @@ mod tests {
             "schema = 1\n[defaults]\nid = \"x\"\n[[mod]]\ngame = \"eu4\"\n",
             "schema = 1\n[defaults]\npath = \"x\"\n[[mod]]\ngame = \"eu4\"\n",
             "schema = 1\n[defaults]\nitem_id = 1\n[[mod]]\ngame = \"eu4\"\n",
+            "schema = 1\n[defaults]\ntitles = { schinese = \"x\" }\n[[mod]]\ngame = \"eu4\"\n",
         ] {
             assert!(error(text).contains("unknown field"), "{text}");
         }
@@ -430,6 +469,23 @@ mod tests {
             let text = format!("schema = 1\n[[mod]]\nid = \"{bad}\"\ngame = \"eu4\"\n");
             assert!(error(&text).contains("is not a slug"), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn title_languages_are_steam_codes() {
+        let text =
+            |titles: &str| format!("schema = 1\n[[mod]]\ngame = \"eu4\"\ntitles = {titles}\n");
+        assert_eq!(
+            error(&text("{ chinese = \"x\" }")),
+            "the mod at `.`: `titles.chinese`: `chinese` is not a Steam API language code; use \
+             `schinese`; see https://partner.steamgames.com/doc/store/localization/languages"
+        );
+        assert!(error(&text("{ english = \"x\" }")).contains("`english` is the default language"));
+        assert_eq!(
+            error(&text("{ japanese = \" \" }")),
+            "the mod at `.`: `titles.japanese` is empty"
+        );
+        assert!(error(&text("{ japanese = 1 }")).contains("invalid type"));
     }
 
     #[test]
