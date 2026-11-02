@@ -1,9 +1,9 @@
 # The GitHub Action
 
-The action downloads the `pdx-ws` release of its own tag and checks its build attestation (or, without `gh`, its SHA-256). Pin a release such as `@v0.2.3`; from 1.0 there is also a floating `@v1` tag. <!-- x-release-please-version -->
+The action downloads the `pdx-ws` release of its own tag and checks its build attestation (or, without `gh`, its SHA-256). Pin a release such as `@v0.3.0`; from 1.0 there is also a floating `@v1` tag. <!-- x-release-please-version -->
 
 ```yaml
-- uses: happy-dwarf-team/paradox-workshop-publish@v0.2.3 # x-release-please-version
+- uses: happy-dwarf-team/paradox-workshop-publish@v0.3.0 # x-release-please-version
   with:
     steam-username: ${{ secrets.STEAM_USERNAME }}
     steam-session: ${{ secrets.STEAM_SESSION }}
@@ -23,7 +23,7 @@ Run it after `actions/checkout`, in a job that names the `steam-workshop` enviro
 | `steam-session` | none | The Steam session from `pdx-ws session export`. Keep it in a secret. |
 | `change-note` | from the changelog | The change note in Markdown, e.g. `${{ github.event.release.body }}`. It applies to every selected mod. |
 | `dry-run` | `false` | `true` plans and reports without sending anything to Steam. Always true on `pull_request`. |
-| `pdx-ws-version` | the action's tag | The `pdx-ws` release to use, e.g. `v0.2.3`, or `v1` for the newest 1.x. <!-- x-release-please-version --> |
+| `pdx-ws-version` | the action's tag | The `pdx-ws` release to use, e.g. `v0.3.0`, or `v1` for the newest 1.x. <!-- x-release-please-version --> |
 | `pdx-ws-path` | none | **For testing this action only.** A `pdx-ws` binary to use instead of downloading a release. It is not verified. |
 
 ## Outputs
