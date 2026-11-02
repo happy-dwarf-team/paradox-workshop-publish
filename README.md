@@ -69,7 +69,7 @@ You create the Workshop item once on your computer with `pdx-ws init` in `client
          - uses: actions/checkout@v7
            with:
              persist-credentials: false
-         - uses: happy-dwarf-team/paradox-workshop-publish@v0.2.3 # x-release-please-version
+         - uses: happy-dwarf-team/paradox-workshop-publish@v0.3.0 # x-release-please-version
            with:
              steam-username: ${{ secrets.STEAM_USERNAME }}
              steam-session: ${{ secrets.STEAM_SESSION }}

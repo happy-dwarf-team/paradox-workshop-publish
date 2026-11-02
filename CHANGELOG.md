@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.3...v0.3.0) (2026-11-02)
+
+
+### Features
+
+* localized titles and descriptions in client mode ([#68](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/68)) ([5962227](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/59622270aa4f53e269494e9c2a5176505a10f336))
+
 ## [0.2.3](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.2...v0.2.3) (2026-11-02)
 
 
