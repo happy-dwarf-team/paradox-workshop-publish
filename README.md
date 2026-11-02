@@ -103,7 +103,7 @@ cargo test --workspace --locked
 
 The `action` workflow runs the GitHub Action from the checkout as a dry run on fixture mods; it sends nothing to Steam.
 
-Release archives are configured for [cargo-dist](https://axodotdev.github.io/cargo-dist/) in `dist-workspace.toml` (`dist plan` lists them); nothing is published yet. Versions and the changelog are managed by release-please from [Conventional Commits](https://www.conventionalcommits.org/) in pull request titles.
+Release archives are configured for [cargo-dist](https://axodotdev.github.io/cargo-dist/) in `dist-workspace.toml` (`dist plan` lists them). The `release` workflow builds them for each release and attaches them to the GitHub release with their SHA-256 sums (`SHA256SUMS.txt`) and build attestations. Versions and the changelog are managed by release-please from [Conventional Commits](https://www.conventionalcommits.org/) in pull request titles.
 
 ## License
 
