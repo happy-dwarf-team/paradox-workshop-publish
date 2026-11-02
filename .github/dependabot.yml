@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Workflow actions and action.yml are pinned to commit SHAs; Dependabot moves the pins.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+  # The pdx-ws crates; they ship in the release archives, so the bump shows under "Build".
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      cargo:
+        patterns: ["*"]
+    commit-message:
+      prefix: build
