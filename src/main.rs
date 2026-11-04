@@ -150,9 +150,9 @@ struct ExportArgs {
     /// The Steam user name. Default: asked on the terminal.
     #[arg(long, value_name = "NAME")]
     user: Option<String>,
-    /// Write the session even when stdout is a terminal.
+    /// Show the session on the terminal instead of refusing to.
     #[arg(long)]
-    stdout: bool,
+    show: bool,
 }
 
 /// A failed command: what to print and the exit code.
@@ -424,11 +424,11 @@ fn session_export(args: &ExportArgs) -> Result<(), Failure> {
         details: Vec::new(),
         code: exit::VALIDATION,
     };
-    if !export::may_write_session(io::stdout().is_terminal(), args.stdout) {
+    if !export::may_write_session(io::stdout().is_terminal(), args.show) {
         let user = args.user.as_deref().unwrap_or("<name>");
         return Err(usage(format!(
             "stdout is a terminal, so the Steam session would be shown on screen; pipe it into \
-             a secret instead, or pass --stdout\n\n{}",
+             a secret instead, or pass --show\n\n{}",
             export::guidance(user)
         )));
     }

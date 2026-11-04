@@ -42,7 +42,7 @@ pub fn data_dir_from(windows: bool, var: impl Fn(&str) -> Option<OsString>) -> O
 }
 
 /// The session goes to stdout only when stdout is not a terminal (a pipe
-/// or a redirect), or when `--stdout` allows a terminal.
+/// or a redirect), or when `--show` allows a terminal.
 pub fn may_write_session(stdout_is_terminal: bool, forced: bool) -> bool {
     !stdout_is_terminal || forced
 }

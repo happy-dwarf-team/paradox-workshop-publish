@@ -75,7 +75,7 @@ fn the_eu4_fixture_changes_the_checksum() {
     let warning = module
         .warnings
         .iter()
-        .find(|warning| warning.code == "checksum")
+        .find(|warning| warning.code == "checksum-change")
         .unwrap();
     assert_eq!(
         warning.message,
@@ -131,7 +131,7 @@ fn a_replace_path_alone_changes_the_checksum() {
     assert!(
         plan.warnings
             .iter()
-            .all(|warning| warning.code != "checksum")
+            .all(|warning| warning.code != "checksum-change")
     );
 }
 

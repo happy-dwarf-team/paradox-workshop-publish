@@ -19,7 +19,7 @@ body:
     id: version
     attributes:
       label: pdx-ws version
-      description: "`pdx-ws --version`, or the action tag in your workflow (e.g. `@v0.2.3`)."
+      description: "`pdx-ws --version`, or the action tag in your workflow (e.g. `@v1`)."
     validations:
       required: true
   - type: dropdown

@@ -435,7 +435,7 @@ pub fn annotations(plan: &PlanView, results: Option<&ResultsView>, run: &Run) ->
     for module in &plan.mods {
         let label = module.label();
         for warning in &module.warnings {
-            if warning.code == "checksum"
+            if warning.code == "checksum-change"
                 && let ChecksumView::Changes {
                     files,
                     replace_paths,
@@ -621,7 +621,7 @@ mod tests {
         "checksum": {"status": "changes",
                      "rules": {"game_version": "1.37", "verified_on": "1.37.5", "source": "s"},
                      "files": ["common/ideas/a.txt"], "replace_paths": ["history/provinces"]},
-        "warnings": [{"code": "checksum", "message": "the published copy changes the EU4 checksum: players lose achievements"},
+        "warnings": [{"code": "checksum-change", "message": "the published copy changes the EU4 checksum: players lose achievements"},
                      {"code": "no-preview", "message": "there is no thumbnail.png, 100%"}],
         "write_backs": []
       }]
