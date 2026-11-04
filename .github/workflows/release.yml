@@ -209,10 +209,34 @@ jobs:
           ITEM_ID: ${{ steps.dry-run.outputs.item-id }}
         run: test "$ITEM_ID" = 2948217283
 
+      # What `@v1` does: find the newest v1.x.y release instead of naming one.
+      # A failure here leaves the major tag where it was.
+      - name: The major version of the release
+        id: major
+        shell: bash
+        env:
+          TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: echo "version=${TAG%%.*}" >> "$GITHUB_OUTPUT"
+
+      - name: Dry run with the major version
+        id: dry-run-major
+        uses: ./
+        with:
+          config: tests/fixtures/eu4/workshop.toml
+          dry-run: true
+          pdx-ws-version: ${{ steps.major.outputs.version }}
+
+      - name: Check the outputs of the major version
+        shell: bash
+        env:
+          ITEM_ID: ${{ steps.dry-run-major.outputs.item-id }}
+        run: test "$ITEM_ID" = 2948217283
+
   # From 1.0, the floating major tag (v1, v2, …) follows the newest release, so
   # `uses: happy-dwarf-team/paradox-workshop-publish@v1` gets every 1.x
   # release. The action resolves v1 to the newest v1.x.y release of pdx-ws
-  # itself. 0.x releases move no tag.
+  # itself. 0.x releases move no tag. Moving a tag needs a tag ruleset that
+  # covers only `v*.*.*`, not the major tags.
   major-tag:
     needs: [release-please, verify-release]
     if: needs.release-please.outputs.release_created == 'true'
