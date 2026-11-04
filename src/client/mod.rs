@@ -303,10 +303,11 @@ pub fn publish(
     let copy = PublishedCopy::create(plan)?;
     let update = item_update(plan, copy.path(), false)?;
     let submitted = workshop.submit_update(plan.app_id, item_id, &update, events)?;
-    submit_localized(workshop, plan, item_id, events)?;
+    // Before the localized updates: their failure must not lose it.
     if submitted.needs_agreement {
         events(Event::Notice(agreement_notice()));
     }
+    submit_localized(workshop, plan, item_id, events)?;
     Ok(Published {
         item_id,
         created: false,
@@ -337,6 +338,10 @@ pub fn init(
     let file = write_back::item_id(config, plan, item_id)
         .map_err(|source| Error::WriteBack { item_id, source })?;
     events(Event::Notice(format!("wrote the item ID into {file}")));
+    // As soon as it is known: a failed upload must not lose it.
+    if created.needs_agreement {
+        events(Event::Notice(agreement_notice()));
+    }
 
     let mut upload = || -> Result<bool, Error> {
         // The repository holds the ID now; plan again, so the published
@@ -348,6 +353,9 @@ pub fn init(
         let copy = PublishedCopy::create(&plan)?;
         let update = item_update(&plan, copy.path(), true)?;
         let submitted = workshop.submit_update(plan.app_id, item_id, &update, events)?;
+        if submitted.needs_agreement && !created.needs_agreement {
+            events(Event::Notice(agreement_notice()));
+        }
         submit_localized(workshop, &plan, item_id, events)?;
         Ok(submitted.needs_agreement)
     };
@@ -356,14 +364,10 @@ pub fn init(
         file: file.clone(),
         source: Box::new(source),
     })?;
-    let needs_agreement = created.needs_agreement || submitted_needs_agreement;
-    if needs_agreement {
-        events(Event::Notice(agreement_notice()));
-    }
     Ok(Initialized {
         item_id,
         write_back: file,
-        needs_agreement,
+        needs_agreement: created.needs_agreement || submitted_needs_agreement,
     })
 }
 

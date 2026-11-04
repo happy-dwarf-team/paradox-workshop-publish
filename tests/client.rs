@@ -73,7 +73,7 @@ impl Workshop for FakeWorkshop {
             descriptor: fs::read_to_string(update.content.join("descriptor.mod")).ok(),
         });
         Ok(Submitted {
-            needs_agreement: false,
+            needs_agreement: self.needs_agreement,
         })
     }
 
@@ -520,4 +520,71 @@ fn init_sends_the_localized_texts_too() {
             (1, 3_900_000_043, "schinese")
         ]
     );
+}
+
+/// Steam's request to accept the legal agreement, in `events`.
+fn agreement_notices(events: &[String]) -> usize {
+    events
+        .iter()
+        .filter(|event| event.contains(LEGAL_AGREEMENT_URL))
+        .count()
+}
+
+#[test]
+fn a_failed_localized_update_keeps_the_agreement_notice_of_a_publish() {
+    let (_, plan) = load(&fixture("localized"));
+    let mut workshop = FakeWorkshop {
+        needs_agreement: true,
+        fail_localized: true,
+        ..FakeWorkshop::default()
+    };
+    let mut events = Vec::new();
+    client::publish(&mut workshop, &plan, &mut |event| {
+        events.push(event.to_string());
+    })
+    .unwrap_err();
+    assert_eq!(agreement_notices(&events), 1, "{events:?}");
+}
+
+#[test]
+fn a_failed_upload_keeps_the_agreement_notice_of_init() {
+    let repo = scratch("eu5");
+    let (config, plan) = load(repo.path());
+    let mut workshop = FakeWorkshop {
+        next_id: 77,
+        needs_agreement: true,
+        fail_submit: true,
+        ..FakeWorkshop::default()
+    };
+    let mut events = Vec::new();
+    client::init(
+        &mut workshop,
+        &config,
+        &plan,
+        &ChangeNoteInput::default(),
+        &mut |event| events.push(event.to_string()),
+    )
+    .unwrap_err();
+    assert_eq!(agreement_notices(&events), 1, "{events:?}");
+}
+
+#[test]
+fn init_gives_the_agreement_notice_once() {
+    let repo = scratch("eu5");
+    let (config, plan) = load(repo.path());
+    let mut workshop = FakeWorkshop {
+        next_id: 77,
+        needs_agreement: true,
+        ..FakeWorkshop::default()
+    };
+    let mut events = Vec::new();
+    client::init(
+        &mut workshop,
+        &config,
+        &plan,
+        &ChangeNoteInput::default(),
+        &mut |event| events.push(event.to_string()),
+    )
+    .unwrap();
+    assert_eq!(agreement_notices(&events), 1, "{events:?}");
 }
