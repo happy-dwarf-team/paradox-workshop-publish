@@ -1,10 +1,10 @@
 {
-  "label": "run4-tags-key-and-failures-ubuntu",
+  "label": "run5-session-lifetime-ubuntu",
   "os": "ubuntu-latest",
   "publishedfileid": "3823257732",
-  "revision": 4,
+  "revision": 5,
   "keys": [],
-  "extra_vdf": {"tags": "Utilities"},
-  "change_note": "E4 run 4: undocumented tags key, then deliberate failures",
-  "fail_tests": true
+  "extra_vdf": {},
+  "change_note": "E4 run 5: does the session of 2026-10-20 still log in (#22)",
+  "fail_tests": false
 }
