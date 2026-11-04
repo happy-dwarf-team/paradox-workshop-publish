@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.0](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.3.0...v1.0.0) (2026-11-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* the action output `plan-json` is now `plan-path`, `pdx-ws session export --stdout` is now `--show`, and the warning code `checksum` is now `checksum-change`.
+
+### Features
+
+* freeze the 1.0 interface ([#73](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/73)) ([e32ae72](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/e32ae72f1721b9db35558fbe073f768cdfd4a6a9))
+
+
+### Bug Fixes
+
+* keep the Workshop agreement notice when a later step fails ([#75](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues/75)) ([442c2d2](https://github.com/happy-dwarf-team/paradox-workshop-publish/commit/442c2d24b59942c12753c5e6ac6897229a038a1a))
+
 ## [0.3.0](https://github.com/happy-dwarf-team/paradox-workshop-publish/compare/v0.2.3...v0.3.0) (2026-11-02)
 
 
