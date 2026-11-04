@@ -10,6 +10,7 @@
 6. [Several mods in one repository](several-mods.md): `id`, `[defaults]`, release-please monorepo tags.
 7. [Security](security.md): what the Steam session can do, how to revoke it, and how to keep it safe.
 8. [Self-hosted runner for `client` mode](self-hosted-client-mode.md).
+9. [Compatibility](compatibility.md): what stays stable across 1.x.
 
 The [examples](../examples) are complete workflows you can copy:
 

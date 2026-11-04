@@ -72,7 +72,7 @@ gh secret set STEAM_USERNAME --env steam-workshop --body my_steam_name
 4. It prints the session, gzipped and base64-encoded, **to stdout only**. Everything else goes to stderr.
 5. It deletes its local copy, so the secret is the only one.
 
-When stdout is a terminal, `pdx-ws` refuses to print the session there unless you pass `--stdout`. Pipe it into the secret instead.
+When stdout is a terminal, `pdx-ws` refuses to print the session there unless you pass `--show`. Pipe it into the secret instead.
 
 Run it on Windows or Linux; steamcmd mode does not support macOS.
 

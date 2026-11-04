@@ -1,9 +1,9 @@
 # The GitHub Action
 
-The action downloads the `pdx-ws` release of its own tag and checks its build attestation (or, without `gh`, its SHA-256). Pin a release such as `@v0.3.0`; from 1.0 there is also a floating `@v1` tag. <!-- x-release-please-version -->
+The action downloads the `pdx-ws` release of its own tag and checks its build attestation (or, without `gh`, its SHA-256). `@v1` follows the newest 1.x release; to stay on one release, pin it, e.g. `@v0.3.0`. <!-- x-release-please-version -->
 
 ```yaml
-- uses: happy-dwarf-team/paradox-workshop-publish@v0.3.0 # x-release-please-version
+- uses: happy-dwarf-team/paradox-workshop-publish@v1
   with:
     steam-username: ${{ secrets.STEAM_USERNAME }}
     steam-session: ${{ secrets.STEAM_SESSION }}
@@ -32,7 +32,7 @@ Run it after `actions/checkout`, in a job that names the `steam-workshop` enviro
 | --- | --- |
 | `item-id` | The Workshop item ID of the selected mod; empty when several mods are selected. |
 | `item-url` | The item's Workshop page; empty when several mods are selected. |
-| `plan-json` | The path of the publish plan of every selected mod, as `pdx-ws plan --json` writes it. |
+| `plan-path` | The path of the publish plan of every selected mod, as `pdx-ws plan --json` writes it. |
 
 ## What it does
 
@@ -42,7 +42,7 @@ Run it after `actions/checkout`, in a job that names the `steam-workshop` enviro
 2. **Installs `pdx-ws`.**
    - It downloads the release archive for the runner (Linux x64, Windows x64, macOS) and verifies its build attestation with `gh attestation verify`.
    - Without `gh` on the runner, it checks the archive's SHA-256 from the release instead and prints a warning.
-3. **Plans:** it runs `pdx-ws plan` and saves the JSON for `plan-json`.
+3. **Plans:** it runs `pdx-ws plan` and saves the JSON at `plan-path`.
 4. **Publishes**, unless it is a dry run.
    - The user name and session reach `pdx-ws` only through the environment variables `PDX_WS_STEAM_USERNAME` and `PDX_WS_STEAM_SESSION`, never on the command line.
    - A failed mod does not stop the others.

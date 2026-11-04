@@ -578,7 +578,7 @@ fn check_checksum(
         });
     }
     warnings.push(Warning {
-        code: "checksum",
+        code: "checksum-change",
         message: format!(
             "the published copy changes the {} checksum: {}",
             rules.name, rules.effect

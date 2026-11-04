@@ -62,16 +62,16 @@ jobs:
         env:
           ITEM_ID: ${{ steps.one.outputs.item-id }}
           ITEM_URL: ${{ steps.one.outputs.item-url }}
-          PLAN_JSON: ${{ steps.one.outputs.plan-json }}
+          PLAN_PATH: ${{ steps.one.outputs.plan-path }}
         run: |
           set -euxo pipefail
           test "$ITEM_ID" = 2948217283
           test "$ITEM_URL" = "https://steamcommunity.com/sharedfiles/filedetails/?id=2948217283"
-          plan=$PLAN_JSON
-          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          plan=$PLAN_PATH
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_PATH"); fi
           test "$(jq '.mods | length' "$plan")" = 1
           test "$(jq -r '.mods[0].metadata.change_note' "$plan")" = 'Hotfix for [b]Riga[/b]'
-          # The action keeps a copy of the job summary next to plan-json.
+          # The action keeps a copy of the job summary next to plan-path.
           summary="$(dirname "$plan")/summary.md"
           grep -Fx '## pdx-ws plan (dry run)' "$summary"
           grep -F '### `.`: Fixture Mod' "$summary"
@@ -93,11 +93,11 @@ jobs:
         env:
           ITEM_ID: ${{ steps.several.outputs.item-id }}
           ITEM_URL: ${{ steps.several.outputs.item-url }}
-          PLAN_JSON: ${{ steps.several.outputs.plan-json }}
+          PLAN_PATH: ${{ steps.several.outputs.plan-path }}
         run: |
           set -euxo pipefail
           test -z "$ITEM_ID"
           test -z "$ITEM_URL"
-          plan=$PLAN_JSON
-          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          plan=$PLAN_PATH
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_PATH"); fi
           test "$(jq -r '[.mods[].id] | join(",")' "$plan")" = alpha,beta

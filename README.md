@@ -13,7 +13,7 @@ Publish Paradox Interactive game mods to the Steam Workshop from GitHub Actions 
 
 Supported games: Europa Universalis IV, Hearts of Iron IV, Stellaris, Imperator: Rome, Crusader Kings III, Victoria 3 and Europa Universalis V.
 
-> **Status: 0.x.** The configuration and the action's inputs may still change before 1.0. Download `pdx-ws` from the [releases](https://github.com/happy-dwarf-team/paradox-workshop-publish/releases); each archive holds the binary and the Steamworks `steam_api` library that `client` mode needs next to it.
+> **Status: 1.0.** `workshop.toml`, the CLI, `--json` and the action's inputs and outputs are [stable across 1.x](docs/guide/compatibility.md): a change that breaks them is version 2. Download `pdx-ws` from the [releases](https://github.com/happy-dwarf-team/paradox-workshop-publish/releases); each archive holds the binary and the Steamworks `steam_api` library that `client` mode needs next to it.
 
 ## Two modes
 
@@ -90,7 +90,7 @@ You create the Workshop item once on your computer with `pdx-ws init` in `client
          - uses: actions/checkout@v7
            with:
              persist-credentials: false
-         - uses: happy-dwarf-team/paradox-workshop-publish@v0.3.0 # x-release-please-version
+         - uses: happy-dwarf-team/paradox-workshop-publish@v1
            with:
              steam-username: ${{ secrets.STEAM_USERNAME }}
              steam-session: ${{ secrets.STEAM_SESSION }}
@@ -101,8 +101,9 @@ The [user guide](docs/guide/README.md) covers each step, the [security notes](do
 
 ## Documentation
 
-- [User guide](docs/guide/README.md): setup, `workshop.toml`, the action, descriptions and change notes, the checksum warning, several mods, security, and a self-hosted runner for `client` mode.
+- [User guide](docs/guide/README.md): setup, `workshop.toml`, the action, descriptions and change notes, the checksum warning, several mods, security, a self-hosted runner for `client` mode, and compatibility.
 - [v1 specification](docs/spec/v1.md): the design and the implementation sequence. The reasoning is in the [planning map](https://github.com/happy-dwarf-team/paradox-workshop-publish/issues?q=label%3Awayfinder%3Amap) and its tickets.
+- [Compatibility](docs/guide/compatibility.md): what stays stable across 1.x.
 - [GLOSSARY.md](GLOSSARY.md): the terms this project uses.
 
 ## Development

@@ -89,13 +89,13 @@ jobs:
         env:
           OUT_ITEM_ID: ${{ steps.publish.outputs.item-id }}
           OUT_ITEM_URL: ${{ steps.publish.outputs.item-url }}
-          PLAN_JSON: ${{ steps.publish.outputs.plan-json }}
+          PLAN_PATH: ${{ steps.publish.outputs.plan-path }}
         run: |
           set -euxo pipefail
           test "$OUT_ITEM_ID" = "$ITEM_ID"
           test "$OUT_ITEM_URL" = "https://steamcommunity.com/sharedfiles/filedetails/?id=$ITEM_ID"
-          plan=$PLAN_JSON
-          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          plan=$PLAN_PATH
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_PATH"); fi
           test "$(jq -r '.mods[0].outcome' "$(dirname "$plan")/results.json")" = published
 
       # The same content again: Steam keeps the version it has and drops the
@@ -114,11 +114,11 @@ jobs:
       - name: Check that the re-publish was reported unchanged
         shell: bash
         env:
-          PLAN_JSON: ${{ steps.again.outputs.plan-json }}
+          PLAN_PATH: ${{ steps.again.outputs.plan-path }}
         run: |
           set -euxo pipefail
-          plan=$PLAN_JSON
-          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_JSON"); fi
+          plan=$PLAN_PATH
+          if command -v cygpath > /dev/null 2>&1; then plan=$(cygpath -u "$PLAN_PATH"); fi
           results="$(dirname "$plan")/results.json"
           jq . "$results"
           test "$(jq -r '.mods[0].outcome' "$results")" = unchanged
