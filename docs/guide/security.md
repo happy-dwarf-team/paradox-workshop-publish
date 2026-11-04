@@ -16,7 +16,7 @@ The *Steam session* is steamcmd's cached login for your account: the `config.vdf
 - your password;
 - your Steam Guard secret.
 
-So it cannot be used to sign in to the Steam client or the website, or to change your password. It lasts until Steam expires it or you revoke it.
+So it cannot be used to sign in to the Steam client or the website, or to change your password. It lasts until Steam expires it or you revoke it. Steam does not say how long that is: ours still worked after 15 days, the longest we have measured. When it expires, `pdx-ws` exits with code 3 and you export a new one.
 
 `pdx-ws` treats it as a secret:
 

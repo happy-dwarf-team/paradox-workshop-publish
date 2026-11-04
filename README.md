@@ -24,6 +24,27 @@ Supported games: Europa Universalis IV, Hearts of Iron IV, Stellaris, Imperator:
 
 You create the Workshop item once on your computer with `pdx-ws init` in `client` mode. After that, CI publishes every release in `steamcmd` mode.
 
+## Limits
+
+- **Tags and other languages need `client` mode.** steamcmd has no key for either, so CI leaves them as they are on Steam. `publish` warns about the localized titles and descriptions it skips (`localized-client-only`). Nothing warns when you change the descriptor's tags: run `pdx-ws publish --mode client` after such a change, and after you change a text in another language.
+- **`steamcmd` mode does not run on macOS.** Use Linux or Windows.
+- **The checksum check covers EU4 only**, with rules verified on 1.37.5. Other games show "the checksum check is not available". On a newer EU4 version the newest rules are used, and the plan says so.
+- **The other games are not proven in production.** Hearts of Iron IV, Stellaris, Imperator: Rome, Crusader Kings III, Victoria 3 and Europa Universalis V have profiles built from the games' documented file formats, but we have only ever published EU4 mods.
+
+## What has been tested
+
+| What | How it was tested |
+| --- | --- |
+| `steamcmd` mode | On real Steam: four EU4 mods of Happy Dwarf Team publish from GitHub Actions, and an end-to-end workflow updates a test item on Ubuntu and Windows before each release and compares the downloaded files. |
+| Steam session | One session still logged in after 15 days, on a fresh runner with no Steam Guard prompt. Longer periods are unmeasured. |
+| `client` mode, `pdx-ws init` | On real Steam, by hand, on Windows only: creating items, and updating EU4 mods with Simplified and Traditional Chinese titles and descriptions. A fake `ISteamUGC` covers it on every pull request. Linux and macOS have not been tried. |
+| `--allow-create` | Against a fake steamcmd only, replaying steamcmd's real output. |
+| Several mods in one repository | With fixture mods only; each of our repositories publishes one mod. |
+| `hoi4`, `stellaris`, `imperator`, `ck3` | The configuration and descriptor are read. Nothing has been published. |
+| `vic3`, `eu5` | Fixture mods with `.metadata/metadata.json`. Nothing has been published. |
+| [Self-hosted runner recipe](docs/guide/self-hosted-client-mode.md) | Not run by us. |
+| Release archives | Each release runs the action from its archives as a dry run on Linux, Windows and macOS. |
+
 ## Quick start
 
 1. **Describe the mod in `workshop.toml`** at the repository root:
