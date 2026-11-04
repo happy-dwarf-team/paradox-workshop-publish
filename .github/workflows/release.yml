@@ -86,8 +86,12 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The tag release-please created, not github.sha: when two pushes come close
+      # together it releases a later commit than the one that started this run
+      # (etch#286). Empty on a manual run, which builds the commit it started from.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
 
       - name: Rust toolchain
